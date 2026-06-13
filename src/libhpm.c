@@ -537,6 +537,11 @@ typedef struct {
     int registered;
 } kc_hpm_tcp_conn_t;
 
+typedef struct {
+    char id[KC_HPM_ID_MAX + 1];
+    char pass[KC_HPM_PASS_MAX + 1];
+} kc_hpm_vip_entry_t;
+
 struct kc_hpm {
     kc_hpm_signal_entry_t *signal_entries;
     int signal_count;
@@ -547,6 +552,9 @@ struct kc_hpm {
     kc_hpm_tcp_conn_t *conns;
     int n_conns;
     int conns_cap;
+    kc_hpm_vip_entry_t *vips;
+    int n_vips;
+    int vips_cap;
     char key[KC_HPM_KEY_STR_SZ];
     char pass[KC_HPM_PASS_MAX + 1];
     int pow_bits;
@@ -597,6 +605,12 @@ typedef pthread_t kc_hpm_thread_t;
 static int kc_hpm_sock_read(kc_hpm_fd_t fd, char *buf, int len);
 static int kc_hpm_write_all(kc_hpm_fd_t fd, const char *buf, int len);
 static void kc_hpm_shutdown_write(kc_hpm_fd_t fd);
+static int kc_hpm_is_space(char ch);
+static char *kc_hpm_trim(char *text);
+static int kc_hpm_find_vip(kc_hpm_t *ctx, const char *id);
+static int kc_hpm_add_vip(kc_hpm_t *ctx, const char *id, const char *pass,
+    char *err, size_t err_cap);
+static const char *kc_hpm_get_register_pass(kc_hpm_t *ctx, const char *id);
 static uint32_t kc_hpm_load_u32_le(const unsigned char *p);
 
 /**
@@ -2317,6 +2331,104 @@ static int kc_hpm_tcp_readline(kc_hpm_fd_t fd, char *buf, int cap, int timeout_s
 }
 
 /**
+ * Returns whether the byte is ASCII whitespace.
+ * @param ch Input byte.
+ * @return 1 when whitespace, 0 otherwise.
+ */
+static int kc_hpm_is_space(char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' ||
+        ch == '\f' || ch == '\v';
+}
+
+/**
+ * Trims leading and trailing ASCII whitespace in place.
+ * @param text Mutable string buffer.
+ * @return Pointer to the first non-whitespace byte.
+ */
+static char *kc_hpm_trim(char *text) {
+    char *end;
+
+    if (!text) return NULL;
+    while (*text && kc_hpm_is_space(*text)) text++;
+    end = text + strlen(text);
+    while (end > text && kc_hpm_is_space(end[-1])) end--;
+    *end = '\0';
+    return text;
+}
+
+/**
+ * Finds one VIP seat by identifier.
+ * @param ctx Open context.
+ * @param id Reserved seat identifier.
+ * @return VIP index on success, -1 when missing.
+ */
+static int kc_hpm_find_vip(kc_hpm_t *ctx, const char *id) {
+    int i;
+
+    if (!ctx || !id) return -1;
+    for (i = 0; i < ctx->n_vips; i++) {
+        if (strcmp(ctx->vips[i].id, id) == 0) return i;
+    }
+    return -1;
+}
+
+/**
+ * Adds one VIP seat definition to the context.
+ * @param ctx Open context.
+ * @param id Reserved seat identifier.
+ * @param pass Reserved seat password.
+ * @param err Output error buffer.
+ * @param err_cap Output error buffer capacity.
+ * @return KC_HPM_OK on success, KC_HPM_ERROR on validation failure.
+ */
+static int kc_hpm_add_vip(kc_hpm_t *ctx, const char *id, const char *pass,
+    char *err, size_t err_cap)
+{
+    kc_hpm_vip_entry_t *vips;
+    int cap;
+
+    if (!ctx || !id || !pass) return KC_HPM_ERROR;
+    if (kc_hpm_find_vip(ctx, id) >= 0) {
+        if (err && err_cap > 0)
+            snprintf(err, err_cap, "HPM_VIP redefines reserved id '%s'", id);
+        return KC_HPM_ERROR;
+    }
+    if (ctx->n_vips >= ctx->vips_cap) {
+        cap = ctx->vips_cap > 0 ? ctx->vips_cap * 2 : 8;
+        vips = (kc_hpm_vip_entry_t *)realloc(ctx->vips,
+            (size_t)cap * sizeof(kc_hpm_vip_entry_t));
+        if (!vips) {
+            if (err && err_cap > 0)
+                snprintf(err, err_cap, "failed to allocate HPM_VIP table");
+            return KC_HPM_ERROR;
+        }
+        ctx->vips = vips;
+        ctx->vips_cap = cap;
+    }
+    strncpy(ctx->vips[ctx->n_vips].id, id, KC_HPM_ID_MAX);
+    ctx->vips[ctx->n_vips].id[KC_HPM_ID_MAX] = '\0';
+    strncpy(ctx->vips[ctx->n_vips].pass, pass, KC_HPM_PASS_MAX);
+    ctx->vips[ctx->n_vips].pass[KC_HPM_PASS_MAX] = '\0';
+    ctx->n_vips++;
+    return KC_HPM_OK;
+}
+
+/**
+ * Returns the registration password for one identifier.
+ * @param ctx Open context.
+ * @param id Service identifier.
+ * @return VIP password when reserved, otherwise the global password.
+ */
+static const char *kc_hpm_get_register_pass(kc_hpm_t *ctx, const char *id) {
+    int idx;
+
+    if (!ctx) return "";
+    idx = kc_hpm_find_vip(ctx, id);
+    if (idx >= 0) return ctx->vips[idx].pass;
+    return ctx->pass;
+}
+
+/**
  * open.
  * @return 0 on success, -1 on error.
  */
@@ -2351,6 +2463,9 @@ int kc_hpm_open(kc_hpm_t **out) {
     ctx->conns = NULL;
     ctx->n_conns = 0;
     ctx->conns_cap = 0;
+    ctx->vips = NULL;
+    ctx->n_vips = 0;
+    ctx->vips_cap = 0;
 #ifdef _WIN32
     InitializeCriticalSection(&ctx->mutex);
 #else
@@ -2376,6 +2491,7 @@ int kc_hpm_close(kc_hpm_t *ctx) {
     for (i = 0; i < ctx->n_conns; i++)
         KC_HPM_FD_CLOSE(ctx->conns[i].fd);
     free(ctx->conns);
+    free(ctx->vips);
     free(ctx->signal_entries);
     free(ctx->peers);
 #ifdef _WIN32
@@ -2469,6 +2585,13 @@ void kc_hpm_options_load_env(kc_hpm_options_t *opts) {
         opts->pass[KC_HPM_PASS_MAX] = '\0';
     }
 
+    val = getenv("HPM_VIP");
+    if (val) {
+        size_t len = strlen(val);
+        opts->vip = (char *)malloc(len + 1);
+        if (opts->vip) memcpy(opts->vip, val, len + 1);
+    }
+
     val = getenv("HPM_SWEEP");
     if (val) opts->sweep = atoi(val);
 
@@ -2490,7 +2613,9 @@ void kc_hpm_options_load_env(kc_hpm_options_t *opts) {
  * @return None.
  */
 void kc_hpm_options_free(kc_hpm_options_t *opts) {
-    (void)opts;
+    if (!opts) return;
+    free(opts->vip);
+    opts->vip = NULL;
 }
 
 /**
@@ -2579,6 +2704,73 @@ int kc_hpm_set_pass(kc_hpm_t *ctx, const char *pass) {
     if (!ctx || !pass) return KC_HPM_ERROR;
     strncpy(ctx->pass, pass, KC_HPM_PASS_MAX);
     ctx->pass[KC_HPM_PASS_MAX] = '\0';
+    return KC_HPM_OK;
+}
+
+/**
+ * Parses the VIP seat map from one whitespace-separated string.
+ * @param ctx Open context.
+ * @param vip Whitespace-separated id/pass pairs.
+ * @param err Output error buffer.
+ * @param err_cap Output error buffer capacity.
+ * @return KC_HPM_OK on success, KC_HPM_ERROR on parse failure.
+ */
+int kc_hpm_set_vip(
+kc_hpm_t *ctx,
+const char *vip,
+char *err,
+size_t err_cap
+)
+{
+    char *copy;
+    char *cursor;
+
+    if (!ctx) return KC_HPM_ERROR;
+    free(ctx->vips);
+    ctx->vips = NULL;
+    ctx->n_vips = 0;
+    ctx->vips_cap = 0;
+    if (!vip || !vip[0]) return KC_HPM_OK;
+    copy = (char *)malloc(strlen(vip) + 1);
+    if (!copy) {
+        if (err && err_cap > 0)
+            snprintf(err, err_cap, "failed to allocate HPM_VIP buffer");
+        return KC_HPM_ERROR;
+    }
+    strcpy(copy, vip);
+    cursor = kc_hpm_trim(copy);
+    while (cursor && *cursor) {
+        char *id;
+        char *pass;
+
+        id = cursor;
+        while (*cursor && !kc_hpm_is_space(*cursor)) cursor++;
+        if (*cursor) *cursor++ = '\0';
+        while (*cursor && kc_hpm_is_space(*cursor)) cursor++;
+        if (!*cursor) {
+            if (err && err_cap > 0)
+                snprintf(err, err_cap, "HPM_VIP has odd token count");
+            free(copy);
+            free(ctx->vips);
+            ctx->vips = NULL;
+            ctx->n_vips = 0;
+            ctx->vips_cap = 0;
+            return KC_HPM_ERROR;
+        }
+        pass = cursor;
+        while (*cursor && !kc_hpm_is_space(*cursor)) cursor++;
+        if (*cursor) *cursor++ = '\0';
+        while (*cursor && kc_hpm_is_space(*cursor)) cursor++;
+        if (kc_hpm_add_vip(ctx, id, pass, err, err_cap) != KC_HPM_OK) {
+            free(copy);
+            free(ctx->vips);
+            ctx->vips = NULL;
+            ctx->n_vips = 0;
+            ctx->vips_cap = 0;
+            return KC_HPM_ERROR;
+        }
+    }
+    free(copy);
     return KC_HPM_OK;
 }
 
@@ -3517,15 +3709,17 @@ int kc_hpm_serve_index(
                                 char solution[17];
                                 char proof[65];
                                 int cidx;
+                                const char *register_pass;
 
                                 if (sscanf(cmd_buf,
                                     "REGISTER:%63[^:]:SOLUTION:%16[^:]:PROOF:%64[^\n]",
                                     id, solution, proof) == 3)
                                 {
+                                    register_pass = kc_hpm_get_register_pass(ctx, id);
                                     cidx = kc_hpm_find_pow_challenge(ctx, &peer_sa);
                                     if (cidx < 0 ||
                                         strcmp(ctx->pow_challenges[cidx].id, id) != 0 ||
-                                        !kc_hpm_verify_register_pow(ctx->pass,
+                                        !kc_hpm_verify_register_pow(register_pass,
                                             ctx->pow_challenges[cidx].nonce_hex, id,
                                             solution, proof, ctx->pow_bits))
                                     {

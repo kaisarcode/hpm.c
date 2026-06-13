@@ -58,14 +58,20 @@ kc_test_cli() {
 # @param $2 PoW bits.
 # @param $3 Shared password.
 # @param $4 Test label.
+# @param $5 Optional HPM_VIP text.
 # @return 0 on success, 1 on failure.
 kc_test_index_start() {
     port=$1
     pow_bits=$2
     pass_key=$3
     label=$4
-    if [ -n "$pass_key" ]; then
+    vip_text=$5
+    if [ -n "$pass_key" ] && [ -n "$vip_text" ]; then
+        HPM_PASS="$pass_key" HPM_VIP="$vip_text" "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx.log" 2>&1 &
+    elif [ -n "$pass_key" ]; then
         HPM_PASS="$pass_key" "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx.log" 2>&1 &
+    elif [ -n "$vip_text" ]; then
+        HPM_VIP="$vip_text" "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx.log" 2>&1 &
     else
         "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx.log" 2>&1 &
     fi
@@ -76,6 +82,67 @@ kc_test_index_start() {
     fi
     if kill -0 "$IPID" 2>/dev/null; then kc_test_pass "index-start-$label"; return 0; fi
     kc_test_fail "index-start-$label"; return 1
+}
+
+# Verifies VIP seat registration precedence and malformed VIP configs.
+# @param $1 Protected index port for VIP success case.
+# @param $2 Protected index port for VIP wrong password case.
+# @param $3 Protected index port for global fallback case.
+# @param $4 Protected index port for odd-token VIP failure case.
+# @param $5 Protected index port for duplicate VIP failure case.
+# @param $6 Backend port for VIP success case.
+# @param $7 Backend port for VIP wrong password case.
+# @param $8 Backend port for global fallback case.
+# @return 0 on success, 1 on failure.
+kc_test_vip_register() {
+    vip_port_ok=$1
+    vip_port_bad=$2
+    vip_port_global=$3
+    vip_port_odd=$4
+    vip_port_dup=$5
+    vip_backend_ok=$6
+    vip_backend_bad=$7
+    vip_backend_global=$8
+    vip_text='vipseat vip-pass admin-seat admin-pass'
+
+    kc_test_index_start "$vip_port_ok" 0 global vip-ok "$vip_text" || return 1
+    kc_test_set_tcp "$vip_port_ok" vipseat "$vip_backend_ok" vip-pass || return 1
+    kc_test_index_stop
+
+    kc_test_index_start "$vip_port_bad" 0 global vip-wrong-pass "$vip_text" || return 1
+    kc_test_tcp_start "$vip_backend_bad" || return 1
+    HPM_PASS=global "$BIN" set vipseat@127.0.0.1:"$vip_port_bad" --tcp "$vip_backend_bad" > "$TMP_ROOT/vip-bad.log" 2>&1 &
+    spid=$!
+    sleep 2
+    if kill -0 "$spid" 2>/dev/null; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "vip-wrong-pass"
+        return 1
+    fi
+    wait "$spid" 2>/dev/null || true
+    kill -9 "$HPID" 2>/dev/null
+    wait "$HPID" 2>/dev/null
+    kc_test_pass "vip-wrong-pass"
+    kc_test_index_stop
+
+    kc_test_index_start "$vip_port_global" 0 global vip-global-fallback "$vip_text" || return 1
+    kc_test_set_tcp "$vip_port_global" plainseat "$vip_backend_global" global || return 1
+    kc_test_index_stop
+
+    if HPM_PASS=global HPM_VIP='vipseat' "$BIN" idx "$vip_port_odd" > "$TMP_ROOT/vip-odd.log" 2>&1; then
+        kc_test_fail "vip-odd"
+        return 1
+    fi
+    kc_test_pass "vip-odd"
+
+    if HPM_PASS=global HPM_VIP='vipseat one vipseat two' "$BIN" idx "$vip_port_dup" > "$TMP_ROOT/vip-dup.log" 2>&1; then
+        kc_test_fail "vip-dup"
+        return 1
+    fi
+    kc_test_pass "vip-dup"
+    kc_test_pass "vip-register"
+    return 0
 }
 
 # Stops the current index process.
@@ -658,10 +725,18 @@ kc_test_main() {
     auth_port_3=$((PORT_BASE + 4))
     auth_port_4=$((PORT_BASE + 5))
     auth_port_5=$((PORT_BASE + 6))
+    vip_port_1=$((PORT_BASE + 7))
+    vip_port_2=$((PORT_BASE + 8))
+    vip_port_3=$((PORT_BASE + 9))
+    vip_port_4=$((PORT_BASE + 23))
+    vip_port_5=$((PORT_BASE + 24))
     auth_backend_1=$((PORT_BASE + 13))
     auth_backend_2=$((PORT_BASE + 14))
     auth_backend_3=$((PORT_BASE + 15))
     auth_backend_4=$((PORT_BASE + 16))
+    vip_backend_1=$((PORT_BASE + 25))
+    vip_backend_2=$((PORT_BASE + 26))
+    vip_backend_3=$((PORT_BASE + 27))
     auth_listen_1=$((PORT_BASE + 112))
 
     kc_test_binary || return 1
@@ -684,6 +759,9 @@ kc_test_main() {
     kc_test_auth_register "$auth_port_1" "$auth_port_2" "$auth_port_3" \
         "$auth_port_4" "$auth_port_5" "$auth_backend_2" "$auth_backend_3" \
         "$auth_backend_4" "$auth_backend_1" "$auth_listen_1" || return 1
+    kc_test_vip_register "$vip_port_1" "$vip_port_2" "$vip_port_3" \
+        "$vip_port_4" "$vip_port_5" "$vip_backend_1" "$vip_backend_2" \
+        "$vip_backend_3" || return 1
     return 0
 }
 

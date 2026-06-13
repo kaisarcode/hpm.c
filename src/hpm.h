@@ -51,6 +51,7 @@ typedef struct kc_hpm_options {
     int seats;
     int pow;
     char pass[KC_HPM_PASS_MAX + 1];
+    char *vip;
     char index_host[256];
     unsigned short index_port;
     char bind_addr[256];
@@ -183,6 +184,12 @@ int kc_hpm_set_pow(kc_hpm_t *ctx, int bits);
 int kc_hpm_set_port(kc_hpm_t *ctx, unsigned short port);
 int kc_hpm_set_protocol(kc_hpm_t *ctx, int proto);
 int kc_hpm_set_pass(kc_hpm_t *ctx, const char *pass);
+int kc_hpm_set_vip(
+kc_hpm_t *ctx,
+const char *vip,
+char *err,
+size_t err_cap
+);
 int kc_hpm_set_sweep(
 kc_hpm_t *ctx,
 int sweep

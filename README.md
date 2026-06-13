@@ -32,6 +32,15 @@ Start a publisher-protected index with registration cost:
 HPM_PASS='password' hpm idx 9876 --pow 20
 ```
 
+Start an index with reserved seats that override the global password:
+
+```bash
+HPM_PASS='global' \
+HPM_VIP='web webpass
+admin adminpass' \
+hpm idx 9876
+```
+
 Publish a local TCP service on `127.0.0.1:8080`:
 
 ```bash
@@ -279,6 +288,7 @@ HPM_PASS='password' hpm idx 9876 --pow 20
 | :--- | :--- |
 | `HPM_POW=0` | PoW bits for index registration (overridden by `--pow` flag). |
 | `HPM_PASS=password` | Optional shared password used to protect server registration. |
+| `HPM_VIP='id pass id pass ...'` | Reserved seat passwords parsed as whitespace-separated `<id> <pass>` pairs. |
 | `HPM_SWEEP=32` | UDP port sweep range used during punch fallback. |
 | `HPM_STUN=stun:host:port` | Optional STUN server used to discover `srflx` automatically. |
 | `HPM_SEATS=1024` | Max announced peers on the index server (overridden by `--max`). |
@@ -290,6 +300,8 @@ Internal debug-only environment knobs used for fault-injection tests:
 - `HPM_DEBUG_STREAM_REORDER_EVERY=N` delays every Nth TCP stream DATA frame once so the next frame arrives first.
 
 `HPM_INDEX` and `HPM_BIND` are parsed by the options loader internally, but the current CLI still requires explicit positional arguments for the index address and explicit command flags for bind behavior.
+
+When `HPM_VIP` defines a password for one seat, that seat must use its VIP password and no longer accepts the global `HPM_PASS`. Seats not listed in `HPM_VIP` still use the global `HPM_PASS`.
 
 ### API
 

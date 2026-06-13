@@ -131,6 +131,7 @@ static void print_help(const char *name) {
     printf("  HPM_INDEX              Parsed internally, CLI still needs explicit index args\n");
     printf("  HPM_POW                PoW bits for index registration\n");
     printf("  HPM_PASS               Optional shared password for REGISTER/set protection\n");
+    printf("  HPM_VIP                Reserved seat passwords as '<id> <pass> ...'\n");
     printf("  HPM_SWEEP              UDP port sweep range used during punch fallback\n");
     printf("  HPM_STUN               Optional STUN URL (stun:host:port)\n");
 }
@@ -154,32 +155,53 @@ int main(int argc, char **argv) {
         kc_hpm_options_t opts;
         unsigned short port;
         char *end;
+        char vip_err[256];
         int max_peers;
         int pow_bits;
+        int exit_code;
 
         opts = kc_hpm_options_default();
         kc_hpm_options_load_env(&opts);
         max_peers = opts.seats;
         pow_bits = opts.pow;
 
-        if (argc < 3) { fprintf(stderr, "hpm: usage: %s idx <port>\n", argv[0]); return 1; }
+        if (argc < 3) {
+            fprintf(stderr, "hpm: usage: %s idx <port>\n", argv[0]);
+            kc_hpm_options_free(&opts);
+            return 1;
+        }
         port = (unsigned short)strtoul(argv[2], &end, 10);
-        if (*end != '\0' || port == 0) { fprintf(stderr, "hpm: invalid port '%s'\n", argv[2]); return 1; }
+        if (*end != '\0' || port == 0) {
+            fprintf(stderr, "hpm: invalid port '%s'\n", argv[2]);
+            kc_hpm_options_free(&opts);
+            return 1;
+        }
 
         for (int i = 3; i < argc; i++) {
             if (strcmp(argv[i], "--max") == 0) {
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --max requires an argument\n"); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --max requires an argument\n"); kc_hpm_options_free(&opts); return 1; }
                 max_peers = atoi(argv[++i]);
             } else if (strcmp(argv[i], "--pow") == 0) {
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --pow requires an argument\n"); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --pow requires an argument\n"); kc_hpm_options_free(&opts); return 1; }
                 pow_bits = atoi(argv[++i]);
-            } else { fprintf(stderr, "hpm: unknown option '%s'\n", argv[i]); return 1; }
+            } else { fprintf(stderr, "hpm: unknown option '%s'\n", argv[i]); kc_hpm_options_free(&opts); return 1; }
         }
 
-        if (kc_hpm_open(&ctx) != KC_HPM_OK) { fprintf(stderr, "hpm: failed to create context\n"); return 1; }
+        if (kc_hpm_open(&ctx) != KC_HPM_OK) {
+            fprintf(stderr, "hpm: failed to create context\n");
+            kc_hpm_options_free(&opts);
+            return 1;
+        }
         kc_hpm_set_pass(ctx, opts.pass);
         if (max_peers > 0) kc_hpm_set_seats(ctx, max_peers);
         kc_hpm_set_pow(ctx, pow_bits);
+        vip_err[0] = '\0';
+        if (kc_hpm_set_vip(ctx, opts.vip, vip_err, sizeof(vip_err)) != KC_HPM_OK) {
+            fprintf(stderr, "hpm: %s\n", vip_err[0] ? vip_err : "invalid HPM_VIP");
+            kc_hpm_close(ctx);
+            kc_hpm_options_free(&opts);
+            return 1;
+        }
 
         kc_hpm_on_signal(ctx, SIGINT, kc_hpm_signal_cb);
         kc_hpm_on_signal(ctx, SIGTERM, kc_hpm_signal_cb);
@@ -189,8 +211,10 @@ int main(int argc, char **argv) {
 
         ret = kc_hpm_serve_index(ctx, "0.0.0.0", port);
         fprintf(stderr, "hpm: index exited: %s\n", kc_hpm_strerror(ret));
+        exit_code = ret == KC_HPM_OK ? 0 : 1;
         kc_hpm_close(ctx);
-        return ret == KC_HPM_OK ? 0 : 1;
+        kc_hpm_options_free(&opts);
+        return exit_code;
 
     } else if (strcmp(argv[1], "set") == 0) {
         kc_hpm_options_t opts;
@@ -203,35 +227,35 @@ int main(int argc, char **argv) {
         opts = kc_hpm_options_default();
         kc_hpm_options_load_env(&opts);
 
-        if (argc < 3) { fprintf(stderr, "hpm: usage: %s set <host>@<index[:port]>\n", argv[0]); return 1; }
+        if (argc < 3) { fprintf(stderr, "hpm: usage: %s set <host>@<index[:port]>\n", argv[0]); kc_hpm_options_free(&opts); return 1; }
         if (parse_hostspec(argv[2], host, sizeof(host), idx_host, sizeof(idx_host), &idx_port) != 0) {
-            fprintf(stderr, "hpm: invalid spec '%s' (expected host@index:port)\n", argv[2]); return 1;
+            fprintf(stderr, "hpm: invalid spec '%s' (expected host@index:port)\n", argv[2]); kc_hpm_options_free(&opts); return 1;
         }
 
         for (int i = 3; i < argc; i++) {
             if (strcmp(argv[i], "--tcp") == 0) {
-                if (proto != 0) { fprintf(stderr, "hpm: choose only one of --tcp or --udp\n"); return 1; }
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --tcp requires a port\n"); return 1; }
+                if (proto != 0) { fprintf(stderr, "hpm: choose only one of --tcp or --udp\n"); kc_hpm_options_free(&opts); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --tcp requires a port\n"); kc_hpm_options_free(&opts); return 1; }
                 proto = KC_HPM_PROTO_TCP;
                 service_port = (unsigned short)atoi(argv[++i]);
             } else if (strcmp(argv[i], "--udp") == 0) {
-                if (proto != 0) { fprintf(stderr, "hpm: choose only one of --tcp or --udp\n"); return 1; }
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --udp requires a port\n"); return 1; }
+                if (proto != 0) { fprintf(stderr, "hpm: choose only one of --tcp or --udp\n"); kc_hpm_options_free(&opts); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --udp requires a port\n"); kc_hpm_options_free(&opts); return 1; }
                 proto = KC_HPM_PROTO_UDP;
                 service_port = (unsigned short)atoi(argv[++i]);
             } else if (strcmp(argv[i], "--sweep") == 0) {
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --sweep requires a number\n"); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --sweep requires a number\n"); kc_hpm_options_free(&opts); return 1; }
                 opts.sweep = atoi(argv[++i]);
             } else if (strcmp(argv[i], "--stun") == 0) {
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --stun requires a URL\n"); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --stun requires a URL\n"); kc_hpm_options_free(&opts); return 1; }
                 strncpy(opts.stun_url, argv[++i], sizeof(opts.stun_url) - 1);
                 opts.stun_url[sizeof(opts.stun_url) - 1] = '\0';
-            } else { fprintf(stderr, "hpm: unknown option '%s'\n", argv[i]); return 1; }
+            } else { fprintf(stderr, "hpm: unknown option '%s'\n", argv[i]); kc_hpm_options_free(&opts); return 1; }
         }
 
-        if (proto == 0 || service_port == 0) { fprintf(stderr, "hpm: set requires --tcp <port> or --udp <port>\n"); return 1; }
+        if (proto == 0 || service_port == 0) { fprintf(stderr, "hpm: set requires --tcp <port> or --udp <port>\n"); kc_hpm_options_free(&opts); return 1; }
 
-        if (kc_hpm_open(&ctx) != KC_HPM_OK) { fprintf(stderr, "hpm: failed to create context\n"); return 1; }
+        if (kc_hpm_open(&ctx) != KC_HPM_OK) { fprintf(stderr, "hpm: failed to create context\n"); kc_hpm_options_free(&opts); return 1; }
         kc_hpm_set_pass(ctx, opts.pass);
         kc_hpm_set_protocol(ctx, proto);
         kc_hpm_set_port(ctx, service_port);
@@ -251,6 +275,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "hpm: set exited: %s\n", kc_hpm_strerror(ret));
 
         kc_hpm_close(ctx);
+        kc_hpm_options_free(&opts);
         return ret == KC_HPM_OK ? 0 : 1;
 
     } else if (strcmp(argv[1], "del") == 0) {
@@ -285,37 +310,37 @@ int main(int argc, char **argv) {
         opts = kc_hpm_options_default();
         kc_hpm_options_load_env(&opts);
 
-        if (argc < 3) { fprintf(stderr, "hpm: usage: %s con <host>@<index[:port]>\n", argv[0]); return 1; }
+        if (argc < 3) { fprintf(stderr, "hpm: usage: %s con <host>@<index[:port]>\n", argv[0]); kc_hpm_options_free(&opts); return 1; }
         if (parse_hostspec(argv[2], host, sizeof(host), idx_host, sizeof(idx_host), &idx_port) != 0) {
-            fprintf(stderr, "hpm: invalid spec '%s' (expected host@index:port)\n", argv[2]); return 1;
+            fprintf(stderr, "hpm: invalid spec '%s' (expected host@index:port)\n", argv[2]); kc_hpm_options_free(&opts); return 1;
         }
 
         for (int i = 3; i < argc; i++) {
             if (strcmp(argv[i], "--tcp") == 0) {
-                if (proto != 0) { fprintf(stderr, "hpm: choose only one of --tcp or --udp\n"); return 1; }
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --tcp requires a port\n"); return 1; }
+                if (proto != 0) { fprintf(stderr, "hpm: choose only one of --tcp or --udp\n"); kc_hpm_options_free(&opts); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --tcp requires a port\n"); kc_hpm_options_free(&opts); return 1; }
                 proto = KC_HPM_PROTO_TCP;
                 listen_port = (unsigned short)atoi(argv[++i]);
             } else if (strcmp(argv[i], "--udp") == 0) {
-                if (proto != 0) { fprintf(stderr, "hpm: choose only one of --tcp or --udp\n"); return 1; }
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --udp requires a port\n"); return 1; }
+                if (proto != 0) { fprintf(stderr, "hpm: choose only one of --tcp or --udp\n"); kc_hpm_options_free(&opts); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --udp requires a port\n"); kc_hpm_options_free(&opts); return 1; }
                 proto = KC_HPM_PROTO_UDP;
                 listen_port = (unsigned short)atoi(argv[++i]);
             } else if (strcmp(argv[i], "--sweep") == 0) {
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --sweep requires a number\n"); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --sweep requires a number\n"); kc_hpm_options_free(&opts); return 1; }
                 opts.sweep = atoi(argv[++i]);
             } else if (strcmp(argv[i], "--stun") == 0) {
-                if (i + 1 >= argc) { fprintf(stderr, "hpm: --stun requires a URL\n"); return 1; }
+                if (i + 1 >= argc) { fprintf(stderr, "hpm: --stun requires a URL\n"); kc_hpm_options_free(&opts); return 1; }
                 strncpy(opts.stun_url, argv[++i], sizeof(opts.stun_url) - 1);
                 opts.stun_url[sizeof(opts.stun_url) - 1] = '\0';
-            } else { fprintf(stderr, "hpm: unknown option '%s'\n", argv[i]); return 1; }
+            } else { fprintf(stderr, "hpm: unknown option '%s'\n", argv[i]); kc_hpm_options_free(&opts); return 1; }
         }
 
-        if (proto == 0 || listen_port == 0) { fprintf(stderr, "hpm: con requires --tcp <port> or --udp <port>\n"); return 1; }
+        if (proto == 0 || listen_port == 0) { fprintf(stderr, "hpm: con requires --tcp <port> or --udp <port>\n"); kc_hpm_options_free(&opts); return 1; }
 
         snprintf(self_id, sizeof(self_id), "c-%d", (int)getpid());
 
-        if (kc_hpm_open(&ctx) != KC_HPM_OK) { fprintf(stderr, "hpm: failed to create context\n"); return 1; }
+        if (kc_hpm_open(&ctx) != KC_HPM_OK) { fprintf(stderr, "hpm: failed to create context\n"); kc_hpm_options_free(&opts); return 1; }
         kc_hpm_set_protocol(ctx, proto);
         kc_hpm_set_port(ctx, listen_port);
         kc_hpm_set_sweep(ctx, opts.sweep);
@@ -332,6 +357,7 @@ int main(int argc, char **argv) {
             fprintf(stderr, "hpm: connect failed: %s\n", kc_hpm_strerror(ret));
 
         kc_hpm_close(ctx);
+        kc_hpm_options_free(&opts);
         return ret == KC_HPM_OK ? 0 : 1;
 
     } else {
