@@ -490,3 +490,5 @@ It wants to shorten the path between a person who has something to share and a c
 Nothing promises to be global. Nothing needs to be permanent. Nothing has to become a monopoly in order to have value.
 
 > **HPM proposes the network as a common space: direct, small, free, and deeply human.**
+
+> **A fair, and that's all.**
