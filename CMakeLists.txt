@@ -20,11 +20,10 @@ endif()
 # Shared library (for external use)
 set(HPM_SOURCES
     src/libhpm.c
-    src/version.c
     lib/monocypher/monocypher.c
 )
 
-set_source_files_properties(src/version.c PROPERTIES
+set_source_files_properties(src/libhpm.c PROPERTIES
     COMPILE_DEFINITIONS KC_HPM_BUILD_VERSION=${HPM_BUILD_VERSION}
 )
 
