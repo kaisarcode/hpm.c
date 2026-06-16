@@ -4467,6 +4467,12 @@ int kc_hpm_wait(
                             }
                             sessions[found].last_rx = time(NULL);
                         }
+                    } else if (strncmp(buf, "PUNCH_PING:", 11) == 0) {
+                        char pong[256];
+                        char ping_sess[64] = {0}, ping_from[64] = {0}, ping_to[64] = {0};
+                        sscanf(buf, "PUNCH_PING:%63[^:]:%63[^:]:%63s", ping_sess, ping_from, ping_to);
+                        snprintf(pong, sizeof(pong), "PUNCH_PONG:%s:%s:%s", ping_sess, ping_to, ping_from);
+                        sendto(udp_fd, pong, strlen(pong), 0, (const struct sockaddr *)&from, sizeof(from));
                     } else {
                         int unset = -1;
                         for (i = 0; i < n_sessions; i++) {
