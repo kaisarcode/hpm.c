@@ -158,7 +158,7 @@ If nobody has announced `game`, then `hpm con game@idx.example.com:9876` fails w
 The form `game@idx.example.com` is **not** a URL; you cannot open it in a browser, ping it, or connect to it directly.
 It only has meaning inside hpm commands to refer to a registered host on a specific index.
 
-IDs cannot contain whitespace, `@`, or `:` because those characters conflict with the CLI and wire syntax. Password tokens used by `HPM_PASS` and `HPM_VIP` cannot contain whitespace.
+IDs cannot contain whitespace, `@`, or `:` because those characters conflict with the CLI and wire syntax. Password tokens used by `HPM_PASS` and `HPM_VIP` are restricted to terminal-safe bytes: letters, digits, and `._-+=,:@%/`.
 
 `HPM_VIP` is parsed as whitespace-separated `<id> <pass>` pairs, so spaces, tabs, newlines, and blank lines are all treated the same after trimming the full string.
 
@@ -329,7 +329,9 @@ Internal debug-only environment knobs used for fault-injection tests:
 
 `HPM_INDEX` and `HPM_BIND` are parsed by the options loader internally, but the current CLI still requires explicit positional arguments for the index address and explicit command flags for bind behavior.
 
-When `HPM_VIP` defines a password for one seat, that seat must use its VIP password and no longer accepts the global `HPM_PASS`. Seats not listed in `HPM_VIP` still use the global `HPM_PASS`.
+When `HPM_VIP` defines a password for one seat, that seat must use its VIP password and no longer accepts the global `HPM_PASS`. VIP seats are reserved at index startup and keep their place even while offline.
+Seats not listed in `HPM_VIP` still use the global `HPM_PASS`, but they may only occupy the non-VIP capacity left after VIP reservations.
+The effective non-VIP capacity is `max(0, --max - vip_count)`. `HPM_VIP` may define more IDs than `--max`; in that case no non-VIP seats remain, but the listed VIP IDs may still register with their own passwords.
 If `HPM_VIP` repeats an ID or contains an invalid ID/password token, `hpm idx` fails at startup.
 
 Examples:

@@ -573,7 +573,9 @@ struct kc_hpm {
     int signal_capacity;
     kc_hpm_peer_t *peers;
     int n_peers;
+    int peers_alloc;
     int n_peers_cap;
+    int nonvip_cap;
     kc_hpm_tcp_conn_t *conns;
     int n_conns;
     int conns_cap;
@@ -2385,7 +2387,21 @@ int kc_hpm_is_valid_id(const char *id) {
 }
 
 /**
- * Returns whether the password token contains no whitespace.
+ * Returns whether one password byte is safe to type in a shell token.
+ * @param ch Input byte.
+ * @return 1 when allowed, 0 otherwise.
+ */
+static int kc_hpm_is_pass_char(char ch) {
+    if (ch >= 'a' && ch <= 'z') return 1;
+    if (ch >= 'A' && ch <= 'Z') return 1;
+    if (ch >= '0' && ch <= '9') return 1;
+    return ch == '.' || ch == '_' || ch == '-' || ch == '+' ||
+        ch == '=' || ch == ',' || ch == ':' || ch == '@' ||
+        ch == '%' || ch == '/';
+}
+
+/**
+ * Returns whether the password token uses only terminal-safe characters.
  * @param pass Password token to validate.
  * @return 1 when valid, 0 otherwise.
  */
@@ -2395,7 +2411,7 @@ int kc_hpm_is_valid_pass_token(const char *pass) {
     if (!pass || !pass[0]) return 0;
     for (i = 0; pass[i]; i++) {
         if (i >= KC_HPM_PASS_MAX) return 0;
-        if (kc_hpm_is_space(pass[i])) return 0;
+        if (!kc_hpm_is_pass_char(pass[i])) return 0;
     }
     return 1;
 }
@@ -2430,6 +2446,56 @@ static int kc_hpm_find_vip(kc_hpm_t *ctx, const char *id) {
         if (strcmp(ctx->vips[i].id, id) == 0) return i;
     }
     return -1;
+}
+
+/**
+ * Recomputes non-VIP capacity after seats or VIP reservations change.
+ * @param ctx Open context.
+ * @return None.
+ */
+static void kc_hpm_update_nonvip_cap(kc_hpm_t *ctx) {
+    if (!ctx) return;
+    ctx->nonvip_cap = ctx->n_peers_cap - ctx->n_vips;
+    if (ctx->nonvip_cap < 0) ctx->nonvip_cap = 0;
+}
+
+/**
+ * Ensures peer storage can hold the requested number of online peers.
+ * @param ctx  Open context.
+ * @param need Required peer slots.
+ * @return KC_HPM_OK on success, KC_HPM_ERROR on allocation failure.
+ */
+static int kc_hpm_ensure_peer_storage(kc_hpm_t *ctx, int need) {
+    kc_hpm_peer_t *peers;
+    int cap;
+
+    if (!ctx) return KC_HPM_ERROR;
+    if (need <= ctx->peers_alloc) return KC_HPM_OK;
+    cap = ctx->peers_alloc > 0 ? ctx->peers_alloc : 8;
+    while (cap < need) cap *= 2;
+    peers = (kc_hpm_peer_t *)realloc(ctx->peers,
+        (size_t)cap * sizeof(kc_hpm_peer_t));
+    if (!peers) return KC_HPM_ERROR;
+    ctx->peers = peers;
+    ctx->peers_alloc = cap;
+    return KC_HPM_OK;
+}
+
+/**
+ * Counts online peers that do not have a reserved VIP seat.
+ * @param ctx Open context.
+ * @return Number of online non-VIP peers.
+ */
+static int kc_hpm_count_nonvip_peers(kc_hpm_t *ctx) {
+    int i;
+    int count;
+
+    if (!ctx) return 0;
+    count = 0;
+    for (i = 0; i < ctx->n_peers; i++) {
+        if (kc_hpm_find_vip(ctx, ctx->peers[i].id) < 0) count++;
+    }
+    return count;
 }
 
 /**
@@ -2521,7 +2587,9 @@ int kc_hpm_open(kc_hpm_t **out) {
     }
     ctx->peers = p;
     ctx->n_peers = 0;
+    ctx->peers_alloc = KC_HPM_MAX_PEERS;
     ctx->n_peers_cap = KC_HPM_MAX_PEERS;
+    ctx->nonvip_cap = KC_HPM_MAX_PEERS;
     ctx->signal_entries = NULL;
     ctx->signal_count = 0;
     ctx->signal_capacity = 0;
@@ -2693,16 +2761,11 @@ void kc_hpm_options_free(kc_hpm_options_t *opts) {
  * @return 0 on success, -1 on error.
  */
 int kc_hpm_set_seats(kc_hpm_t *ctx, int seats) {
-    kc_hpm_peer_t *p;
     int cap;
     if (!ctx) return KC_HPM_ERROR;
-    cap = seats > 0 ? seats : KC_HPM_MAX_PEERS;
-    if (cap < ctx->n_peers) return KC_HPM_EFULL;
-    p = (kc_hpm_peer_t *)realloc(ctx->peers,
-        (size_t)cap * sizeof(kc_hpm_peer_t));
-    if (!p) return KC_HPM_ERROR;
-    ctx->peers = p;
+    cap = seats >= 0 ? seats : KC_HPM_MAX_PEERS;
     ctx->n_peers_cap = cap;
+    kc_hpm_update_nonvip_cap(ctx);
     return KC_HPM_OK;
 }
 
@@ -2772,6 +2835,7 @@ int kc_hpm_set_sweep(kc_hpm_t *ctx, int sweep) {
  */
 int kc_hpm_set_pass(kc_hpm_t *ctx, const char *pass) {
     if (!ctx || !pass) return KC_HPM_ERROR;
+    if (pass[0] && !kc_hpm_is_valid_pass_token(pass)) return KC_HPM_ERROR;
     strncpy(ctx->pass, pass, KC_HPM_PASS_MAX);
     ctx->pass[KC_HPM_PASS_MAX] = '\0';
     return KC_HPM_OK;
@@ -2800,6 +2864,7 @@ size_t err_cap
     ctx->vips = NULL;
     ctx->n_vips = 0;
     ctx->vips_cap = 0;
+    kc_hpm_update_nonvip_cap(ctx);
     if (!vip || !vip[0]) return KC_HPM_OK;
     copy = (char *)malloc(strlen(vip) + 1);
     if (!copy) {
@@ -2825,6 +2890,7 @@ size_t err_cap
             ctx->vips = NULL;
             ctx->n_vips = 0;
             ctx->vips_cap = 0;
+            kc_hpm_update_nonvip_cap(ctx);
             return KC_HPM_ERROR;
         }
         pass = cursor;
@@ -2837,10 +2903,12 @@ size_t err_cap
             ctx->vips = NULL;
             ctx->n_vips = 0;
             ctx->vips_cap = 0;
+            kc_hpm_update_nonvip_cap(ctx);
             return KC_HPM_ERROR;
         }
     }
     free(copy);
+    kc_hpm_update_nonvip_cap(ctx);
     return KC_HPM_OK;
 }
 
@@ -2921,6 +2989,7 @@ static int kc_hpm_add_peer(kc_hpm_t *ctx, const char *id)
 {
     size_t id_len;
     int idx;
+    int is_vip;
 
     idx = kc_hpm_find_peer(ctx, id);
     if (idx >= 0) {
@@ -2929,8 +2998,11 @@ static int kc_hpm_add_peer(kc_hpm_t *ctx, const char *id)
         return KC_HPM_OK;
     }
 
-    if (ctx->n_peers >= ctx->n_peers_cap)
+    is_vip = kc_hpm_find_vip(ctx, id) >= 0;
+    if (!is_vip && kc_hpm_count_nonvip_peers(ctx) >= ctx->nonvip_cap)
         return KC_HPM_EFULL;
+    if (kc_hpm_ensure_peer_storage(ctx, ctx->n_peers + 1) != KC_HPM_OK)
+        return KC_HPM_ERROR;
 
     id_len = strlen(id);
     if (id_len > KC_HPM_ID_MAX)

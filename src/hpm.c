@@ -133,6 +133,7 @@ static void print_help(const char *name) {
     printf("  HPM_SWEEP              UDP port sweep range used during punch fallback\n");
     printf("  HPM_STUN               Optional STUN URL (stun:host:port)\n");
     printf("  IDs cannot contain whitespace, '@', or ':'\n");
+    printf("  Passwords may use A-Z a-z 0-9 . _ - + = , : @ %% /\n");
 }
 
 /**
@@ -160,12 +161,14 @@ int main(int argc, char **argv) {
         char *end;
         char vip_err[256];
         int max_peers;
+        int max_peers_set;
         int pow_bits;
         int exit_code;
 
         opts = kc_hpm_options_default();
         kc_hpm_options_load_env(&opts);
         max_peers = opts.seats;
+        max_peers_set = getenv("HPM_SEATS") != NULL;
         pow_bits = opts.pow;
 
         if (argc < 3) {
@@ -184,6 +187,7 @@ int main(int argc, char **argv) {
             if (strcmp(argv[i], "--max") == 0) {
                 if (i + 1 >= argc) { fprintf(stderr, "hpm: --max requires an argument\n"); kc_hpm_options_free(&opts); return 1; }
                 max_peers = atoi(argv[++i]);
+                max_peers_set = 1;
             } else if (strcmp(argv[i], "--pow") == 0) {
                 if (i + 1 >= argc) { fprintf(stderr, "hpm: --pow requires an argument\n"); kc_hpm_options_free(&opts); return 1; }
                 pow_bits = atoi(argv[++i]);
@@ -195,8 +199,13 @@ int main(int argc, char **argv) {
             kc_hpm_options_free(&opts);
             return 1;
         }
-        kc_hpm_set_pass(ctx, opts.pass);
-        if (max_peers > 0) kc_hpm_set_seats(ctx, max_peers);
+        if (kc_hpm_set_pass(ctx, opts.pass) != KC_HPM_OK) {
+            fprintf(stderr, "hpm: invalid HPM_PASS characters\n");
+            kc_hpm_close(ctx);
+            kc_hpm_options_free(&opts);
+            return 1;
+        }
+        if (max_peers_set) kc_hpm_set_seats(ctx, max_peers);
         kc_hpm_set_pow(ctx, pow_bits);
         vip_err[0] = '\0';
         if (kc_hpm_set_vip(ctx, opts.vip, vip_err, sizeof(vip_err)) != KC_HPM_OK) {
@@ -264,7 +273,12 @@ int main(int argc, char **argv) {
         if (proto == 0 || service_port == 0) { fprintf(stderr, "hpm: set requires --tcp <port> or --udp <port>\n"); kc_hpm_options_free(&opts); return 1; }
 
         if (kc_hpm_open(&ctx) != KC_HPM_OK) { fprintf(stderr, "hpm: failed to create context\n"); kc_hpm_options_free(&opts); return 1; }
-        kc_hpm_set_pass(ctx, opts.pass);
+        if (kc_hpm_set_pass(ctx, opts.pass) != KC_HPM_OK) {
+            fprintf(stderr, "hpm: invalid HPM_PASS characters\n");
+            kc_hpm_close(ctx);
+            kc_hpm_options_free(&opts);
+            return 1;
+        }
         kc_hpm_set_protocol(ctx, proto);
         kc_hpm_set_port(ctx, service_port);
         kc_hpm_set_sweep(ctx, opts.sweep);

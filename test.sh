@@ -51,6 +51,7 @@ kc_test_cli() {
     if "$BIN" set 'bad:id@127.0.0.1:1' --tcp 1 > /dev/null 2>&1; then kc_test_fail "cli: invalid set id should fail"; return 1; fi
     if "$BIN" con 'bad@id@127.0.0.1:1' --tcp 1 > /dev/null 2>&1; then kc_test_fail "cli: invalid con id should fail"; return 1; fi
     if "$BIN" del 'bad:id@127.0.0.1:1' > /dev/null 2>&1; then kc_test_fail "cli: invalid del id should fail"; return 1; fi
+    if HPM_PASS='bad`tick' "$BIN" set foo@127.0.0.1:1 --tcp 1 > /dev/null 2>&1; then kc_test_fail "cli: invalid HPM_PASS should fail"; return 1; fi
     kc_test_pass "cli"; return 0
 }
 
@@ -151,7 +152,71 @@ kc_test_vip_register() {
     fi
     kc_test_pass "vip-invalid-id"
 
+    if HPM_PASS=global HPM_VIP='vipseat bad`tick' "$BIN" idx "$vip_port_invalid" > "$TMP_ROOT/vip-invalid-pass.log" 2>&1; then
+        kc_test_fail "vip-invalid-pass"
+        return 1
+    fi
+    kc_test_pass "vip-invalid-pass"
+
     kc_test_pass "vip-register"
+    return 0
+}
+
+# Verifies VIP seats reserve capacity before runtime and do not cap VIP count.
+# @param $1 Index port where one VIP consumes all non-VIP capacity.
+# @param $2 Index port where one non-VIP seat remains.
+# @param $3 Index port where VIP count exceeds --max.
+# @param $4 Backend port for rejected non-VIP attempt.
+# @param $5 Backend port for accepted non-VIP attempt.
+# @param $6 Backend port for first VIP over --max.
+# @param $7 Backend port for second VIP over --max.
+# @return 0 on success, 1 on failure.
+kc_test_vip_seat_reserve() {
+    full_port=$1
+    open_port=$2
+    over_port=$3
+    full_backend=$4
+    open_backend=$5
+    over_backend_1=$6
+    over_backend_2=$7
+
+    HPM_VIP='vip vip-pass' "$BIN" idx "$full_port" --max 1 --pow 0 > "$TMP_ROOT/vip-seat-full-idx.log" 2>&1 &
+    IPID=$!
+    sleep 1
+    if ! kill -0 "$IPID" 2>/dev/null; then kc_test_fail "vip-seat-full-index"; return 1; fi
+    kc_test_tcp_start "$full_backend" || return 1
+    "$BIN" set test@127.0.0.1:"$full_port" --tcp "$full_backend" > "$TMP_ROOT/vip-seat-full-set.log" 2>&1 &
+    spid=$!
+    sleep 2
+    if kill -0 "$spid" 2>/dev/null; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_index_stop
+        kc_test_fail "vip-seat-reserved"
+        return 1
+    fi
+    wait "$spid" 2>/dev/null || true
+    kill -9 "$HPID" 2>/dev/null
+    wait "$HPID" 2>/dev/null
+    kc_test_index_stop
+    kc_test_pass "vip-seat-reserved"
+
+    HPM_VIP='vip vip-pass' "$BIN" idx "$open_port" --max 2 --pow 0 > "$TMP_ROOT/vip-seat-open-idx.log" 2>&1 &
+    IPID=$!
+    sleep 1
+    if ! kill -0 "$IPID" 2>/dev/null; then kc_test_fail "vip-seat-open-index"; return 1; fi
+    kc_test_set_tcp "$open_port" test "$open_backend" "" || return 1
+    kc_test_index_stop
+
+    HPM_VIP='vip1 pass1 vip2 pass2' "$BIN" idx "$over_port" --max 1 --pow 0 > "$TMP_ROOT/vip-seat-over-idx.log" 2>&1 &
+    IPID=$!
+    sleep 1
+    if ! kill -0 "$IPID" 2>/dev/null; then kc_test_fail "vip-seat-over-index"; return 1; fi
+    kc_test_set_tcp "$over_port" vip1 "$over_backend_1" pass1 || return 1
+    kc_test_set_tcp "$over_port" vip2 "$over_backend_2" pass2 || return 1
+    kc_test_index_stop
+
+    kc_test_pass "vip-seat-reserve"
     return 0
 }
 
@@ -826,6 +891,9 @@ kc_test_main() {
     vip_port_4=$((PORT_BASE + 23))
     vip_port_5=$((PORT_BASE + 24))
     vip_port_6=$((PORT_BASE + 28))
+    vip_seat_port_1=$((PORT_BASE + 30))
+    vip_seat_port_2=$((PORT_BASE + 31))
+    vip_seat_port_3=$((PORT_BASE + 32))
     auth_backend_1=$((PORT_BASE + 13))
     auth_backend_2=$((PORT_BASE + 14))
     auth_backend_3=$((PORT_BASE + 15))
@@ -833,6 +901,10 @@ kc_test_main() {
     vip_backend_1=$((PORT_BASE + 25))
     vip_backend_2=$((PORT_BASE + 26))
     vip_backend_3=$((PORT_BASE + 27))
+    vip_seat_backend_1=$((PORT_BASE + 33))
+    vip_seat_backend_2=$((PORT_BASE + 34))
+    vip_seat_backend_3=$((PORT_BASE + 35))
+    vip_seat_backend_4=$((PORT_BASE + 36))
     control_backend=$((PORT_BASE + 29))
     auth_listen_1=$((PORT_BASE + 112))
 
@@ -861,6 +933,9 @@ kc_test_main() {
     kc_test_vip_register "$vip_port_1" "$vip_port_2" "$vip_port_3" \
         "$vip_port_4" "$vip_port_5" "$vip_backend_1" "$vip_backend_2" \
         "$vip_backend_3" "$vip_port_6" || return 1
+    kc_test_vip_seat_reserve "$vip_seat_port_1" "$vip_seat_port_2" \
+        "$vip_seat_port_3" "$vip_seat_backend_1" "$vip_seat_backend_2" \
+        "$vip_seat_backend_3" "$vip_seat_backend_4" || return 1
     pkill -9 -P $$ 2>/dev/null || true
     wait 2>/dev/null || true
     return 0
