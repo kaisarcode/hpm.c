@@ -2,6 +2,8 @@
 
 `p2p.c` is a small and portable C library and CLI for exposing local TCP or UDP services over peer-to-peer connections.
 
+The project was originally called **HolePunchMan**, a name chosen when it was still an experiment focused on NAT hole punching. As the project grew beyond that initial scope into a reusable peer-to-peer communication library, it was renamed **KaisarCode P2P**.
+
 ---
 
 ## CLI
