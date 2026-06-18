@@ -876,11 +876,30 @@ static uint64_t kc_p2p_now_ms(void) {
 #endif
 }
 
+#ifdef KC_P2P_TEST_RANDOM
+static unsigned char kc_p2p_test_random_bytes[256];
+static size_t kc_p2p_test_random_len;
+static size_t kc_p2p_test_random_pos;
+static int kc_p2p_test_random_fail;
+#endif
+
 /**
  * Fills a buffer with secure random bytes.
  * @return 0 on success, -1 on error.
  */
 static int kc_p2p_fill_random(unsigned char *buf, size_t len) {
+#ifdef KC_P2P_TEST_RANDOM
+    if (kc_p2p_test_random_fail) return -1;
+    if (kc_p2p_test_random_len > 0) {
+        size_t i;
+        for (i = 0; i < len; i++) {
+            buf[i] = kc_p2p_test_random_bytes[kc_p2p_test_random_pos %
+                kc_p2p_test_random_len];
+            kc_p2p_test_random_pos++;
+        }
+        return 0;
+    }
+#endif
 #ifdef _WIN32
     return BCryptGenRandom(NULL, (PUCHAR)buf, (ULONG)len,
         BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0 ? 0 : -1;
@@ -903,6 +922,37 @@ static int kc_p2p_fill_random(unsigned char *buf, size_t len) {
     return 0;
 #endif
 }
+
+#ifdef KC_P2P_TEST_RANDOM
+/**
+ * Configures deterministic random bytes for test builds.
+ * @param bytes Byte stream to repeat.
+ * @param len   Byte stream length.
+ * @return None.
+ */
+void kc_p2p_test_random_set(const unsigned char *bytes, size_t len) {
+    if (!bytes || len == 0) {
+        kc_p2p_test_random_len = 0;
+        kc_p2p_test_random_pos = 0;
+        return;
+    }
+    if (len > sizeof(kc_p2p_test_random_bytes))
+        len = sizeof(kc_p2p_test_random_bytes);
+    memcpy(kc_p2p_test_random_bytes, bytes, len);
+    kc_p2p_test_random_len = len;
+    kc_p2p_test_random_pos = 0;
+    kc_p2p_test_random_fail = 0;
+}
+
+/**
+ * Configures random-source failure for test builds.
+ * @param fail Non-zero forces failure.
+ * @return None.
+ */
+void kc_p2p_test_random_set_fail(int fail) {
+    kc_p2p_test_random_fail = fail ? 1 : 0;
+}
+#endif
 
 /**
  * Decodes one hex nibble.
@@ -2965,17 +3015,14 @@ static void kc_p2p_evict_stale(kc_p2p_t *ctx) {
  * Generate key.
  * @return Status code.
  */
-static void kc_p2p_generate_key(char *out) {
-    static int seeded = 0;
-    int i;
-    const char hex[] = "0123456789abcdef";
-    if (!seeded) {
-        srand((unsigned)time(NULL));
-        seeded = 1;
-    }
-    for (i = 0; i < KC_P2P_KEY_SZ; i++)
-        out[i] = hex[rand() % 16];
-    out[KC_P2P_KEY_SZ] = '\0';
+static int kc_p2p_generate_key(char *out) {
+    unsigned char random_bytes[KC_P2P_KEY_SZ / 2];
+
+    if (!out) return 0;
+    if (kc_p2p_fill_random(random_bytes, sizeof(random_bytes)) != 0)
+        return 0;
+    return kc_p2p_hex_encode(random_bytes, sizeof(random_bytes), out,
+        KC_P2P_KEY_SZ + 1);
 }
 
 /**
@@ -2996,7 +3043,8 @@ static int kc_p2p_add_peer(kc_p2p_t *ctx, const char *id)
     idx = kc_p2p_find_peer(ctx, id);
     if (idx >= 0) {
         ctx->peers[idx].last_seen = time(NULL);
-        kc_p2p_generate_key(ctx->peers[idx].key);
+        if (!kc_p2p_generate_key(ctx->peers[idx].key))
+            return KC_P2P_ERROR;
         return KC_P2P_OK;
     }
 
@@ -3013,7 +3061,8 @@ static int kc_p2p_add_peer(kc_p2p_t *ctx, const char *id)
     ctx->peers[ctx->n_peers].id[id_len] = '\0';
 
     ctx->peers[ctx->n_peers].last_seen = time(NULL);
-    kc_p2p_generate_key(ctx->peers[ctx->n_peers].key);
+    if (!kc_p2p_generate_key(ctx->peers[ctx->n_peers].key))
+        return KC_P2P_ERROR;
     ctx->n_peers++;
     return KC_P2P_OK;
 }
@@ -3296,11 +3345,8 @@ static void kc_p2p_stun_len(unsigned char *buf, int o) {
  * STUN gen id.
  * @return None.
  */
-static void kc_p2p_stun_gen_id(unsigned char id[12]) {
-    static int kc_p2p_stun_seeded = 0;
-    int i;
-    if (!kc_p2p_stun_seeded) { srand((unsigned)time(NULL)); kc_p2p_stun_seeded = 1; }
-    for (i = 0; i < 12; i++) id[i] = (unsigned char)(rand() & 0xff);
+static int kc_p2p_stun_gen_id(unsigned char id[12]) {
+    return kc_p2p_fill_random(id, 12) == 0;
 }
 
 /**
@@ -3379,7 +3425,7 @@ static int kc_p2p_stun_rd_xaddr(const unsigned char *buf, int o, int al,
 static int kc_p2p_stun_binding(kc_p2p_t *ctx, int udp_fd,
     char *out_ip, int out_cap, unsigned short *out_port)
 {
-    unsigned char tx[4096], rx[4096], id[12];
+    unsigned char tx[4096], rx[4096], tx_id[12], rx_id[12];
     char host[256];
     unsigned short port;
     struct sockaddr_in srv;
@@ -3408,8 +3454,8 @@ static int kc_p2p_stun_binding(kc_p2p_t *ctx, int udp_fd,
 
     if (kc_p2p_resolve(host, port, SOCK_DGRAM, &srv) != 0) return -1;
 
-    kc_p2p_stun_gen_id(id);
-    off = kc_p2p_stun_build(tx, KC_P2P_STUN_BINDING, id);
+    if (!kc_p2p_stun_gen_id(tx_id)) return -1;
+    off = kc_p2p_stun_build(tx, KC_P2P_STUN_BINDING, tx_id);
     kc_p2p_stun_len(tx, off);
 
     if (sendto(udp_fd, (const char *)tx, (size_t)off, 0,
@@ -3422,12 +3468,13 @@ static int kc_p2p_stun_binding(kc_p2p_t *ctx, int udp_fd,
     rl = (int)recvfrom(udp_fd, (char *)rx, sizeof(rx), 0, NULL, NULL);
     if (rl < 20) return -1;
 
-    mt = kc_p2p_stun_hdr(rx, rl, id);
+    mt = kc_p2p_stun_hdr(rx, rl, rx_id);
     if (mt != KC_P2P_STUN_BINDING_RESP) return -1;
+    if (memcmp(tx_id, rx_id, sizeof(tx_id)) != 0) return -1;
 
     ao = kc_p2p_stun_find(rx, rl, KC_P2P_STUN_ATTR_XOR_MAPPED_ADDR, &al);
     if (ao < 0) return -1;
-    if (kc_p2p_stun_rd_xaddr(rx, ao, al, id, out_ip, out_cap, out_port) != 0)
+    if (kc_p2p_stun_rd_xaddr(rx, ao, al, tx_id, out_ip, out_cap, out_port) != 0)
         return -1;
     return 0;
 }
@@ -3892,21 +3939,18 @@ int kc_p2p_serve_index(
                             {
                                 kc_p2p_tcp_send(c->fd, "ERROR:busy");
                             } else {
-                                char nonce[9];
-                                int nonce_i;
+                                unsigned char nonce[8];
+                                char nonce_hex[17];
 
-                                for (nonce_i = 0; nonce_i < 8; nonce_i++)
-                                    nonce[nonce_i] = (char)(rand() & 0xff);
-                                nonce[8] = '\0';
-                                snprintf(reply_buf, sizeof(reply_buf), "CHALLENGE:");
-                                for (nonce_i = 0; nonce_i < 8; nonce_i++) {
-                                    snprintf(reply_buf + strlen(reply_buf),
-                                        sizeof(reply_buf) - strlen(reply_buf), "%02x",
-                                        (unsigned char)nonce[nonce_i]);
+                                if (kc_p2p_fill_random(nonce, sizeof(nonce)) != 0 ||
+                                    !kc_p2p_hex_encode(nonce, sizeof(nonce),
+                                        nonce_hex, sizeof(nonce_hex)))
+                                {
+                                    kc_p2p_tcp_send(c->fd, "ERROR:random");
+                                    continue;
                                 }
-                                snprintf(reply_buf + strlen(reply_buf),
-                                    sizeof(reply_buf) - strlen(reply_buf), ":%d",
-                                    ctx->pow_bits);
+                                snprintf(reply_buf, sizeof(reply_buf),
+                                    "CHALLENGE:%s:%d", nonce_hex, ctx->pow_bits);
                                 if (!kc_p2p_store_pow_challenge(ctx, &peer_sa, id,
                                     reply_buf + 10))
                                 {
@@ -4934,9 +4978,15 @@ int kc_p2p_connect(
                         int cand_count = 0;
                         kc_p2p_candidate_t remote_cands[KC_P2P_CANDIDATES_MAX];
                         int remote_cand_count = 0;
-                        char sess_id[32];
-                        snprintf(sess_id, sizeof(sess_id), "%lx%04x",
-                            (unsigned long)time(NULL), (unsigned)(rand() & 0xFFFF));
+                        unsigned char sess_random[8];
+                        char sess_id[17];
+                        if (kc_p2p_fill_random(sess_random, sizeof(sess_random)) != 0 ||
+                            !kc_p2p_hex_encode(sess_random, sizeof(sess_random),
+                                sess_id, sizeof(sess_id)))
+                        {
+                            KC_P2P_FD_CLOSE(ctrl_fd);
+                            goto udp_skip;
+                        }
                         
                         int temp_udp = kc_p2p_create_socket("0.0.0.0", 0);
                         kc_p2p_gather_candidates(ctx, temp_udp, cands,
@@ -5049,3 +5099,73 @@ udp_skip:
     kc_p2p_platform_cleanup();
     return KC_P2P_OK;
 }
+
+#ifdef KC_P2P_TEST_RANDOM
+/**
+ * Generates one registration key through the test-visible path.
+ * @param out Output key buffer.
+ * @return 1 on success, 0 on error.
+ */
+int kc_p2p_test_generate_key(char *out) {
+    return kc_p2p_generate_key(out);
+}
+
+/**
+ * Generates one STUN transaction identifier through the test-visible path.
+ * @param out Output transaction identifier.
+ * @return 1 on success, 0 on error.
+ */
+int kc_p2p_test_stun_gen_id(unsigned char out[12]) {
+    return kc_p2p_stun_gen_id(out);
+}
+
+/**
+ * Generates one stream session identifier through the test-visible path.
+ * @param out Output binary identifier.
+ * @param hex Output hex identifier.
+ * @return 1 on success, 0 on error.
+ */
+int kc_p2p_test_stream_make_session_id(
+unsigned char out[KC_P2P_STREAM_SESSION_ID_SZ],
+char hex[KC_P2P_STREAM_SESSION_ID_SZ * 2 + 1]
+)
+{
+    return kc_p2p_stream_make_session_id(out, hex);
+}
+
+/**
+ * Generates one register challenge nonce through the test-visible path.
+ * @param hex Output hex nonce.
+ * @return 1 on success, 0 on error.
+ */
+int kc_p2p_test_pow_nonce(char hex[17]) {
+    unsigned char nonce[8];
+
+    if (kc_p2p_fill_random(nonce, sizeof(nonce)) != 0) return 0;
+    return kc_p2p_hex_encode(nonce, sizeof(nonce), hex, 17);
+}
+
+/**
+ * Generates one UDP session identifier through the test-visible path.
+ * @param hex Output hex session identifier.
+ * @return 1 on success, 0 on error.
+ */
+int kc_p2p_test_udp_session_id(char hex[17]) {
+    unsigned char session_id[8];
+
+    if (kc_p2p_fill_random(session_id, sizeof(session_id)) != 0) return 0;
+    return kc_p2p_hex_encode(session_id, sizeof(session_id), hex, 17);
+}
+
+/**
+ * Compares STUN transaction identifiers through the test-visible path.
+ * @param expected Expected transaction identifier.
+ * @param actual   Actual transaction identifier.
+ * @return 1 when equal, 0 otherwise.
+ */
+int kc_p2p_test_stun_id_matches(const unsigned char expected[12],
+const unsigned char actual[12])
+{
+    return memcmp(expected, actual, 12) == 0;
+}
+#endif

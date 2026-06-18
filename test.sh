@@ -16,7 +16,6 @@ HPID=
 UPID=
 
 # Prints a failure line and increments counter.
-# @param $1 Failure message.
 # @return 1 on failure.
 kc_test_fail() {
     FAIL=$((FAIL+1))
@@ -24,9 +23,8 @@ kc_test_fail() {
     return 1
 }
 
-# Prints a success line and increments counter.
-# @param $1 Success message.
-# @return 0 on success.
+# Reports one passed assertion.
+# @return 0 on success, 1 on failure.
 kc_test_pass() {
     PASS=$((PASS+1))
     printf '\033[32m[PASS]\033[0m %s\n' "$1"
@@ -58,11 +56,6 @@ kc_test_cli() {
 }
 
 # Starts the index server in background.
-# @param $1 Index port.
-# @param $2 PoW bits.
-# @param $3 Shared password.
-# @param $4 Test label.
-# @param $5 Optional P2P_VIP text.
 # @return 0 on success, 1 on failure.
 kc_test_index_start() {
     port=$1
@@ -89,15 +82,6 @@ kc_test_index_start() {
 }
 
 # Verifies VIP seat registration precedence and malformed VIP configs.
-# @param $1 Protected index port for VIP success case.
-# @param $2 Protected index port for VIP wrong password case.
-# @param $3 Protected index port for global fallback case.
-# @param $4 Protected index port for odd-token VIP failure case.
-# @param $5 Protected index port for duplicate VIP failure case.
-# @param $6 Backend port for VIP success case.
-# @param $7 Backend port for VIP wrong password case.
-# @param $8 Backend port for global fallback case.
-# @param $9 Protected index port for invalid VIP id case.
 # @return 0 on success, 1 on failure.
 kc_test_vip_register() {
     vip_port_ok=$1
@@ -165,13 +149,6 @@ kc_test_vip_register() {
 }
 
 # Verifies VIP seats reserve capacity before runtime and do not cap VIP count.
-# @param $1 Index port where one VIP consumes all non-VIP capacity.
-# @param $2 Index port where one non-VIP seat remains.
-# @param $3 Index port where VIP count exceeds --max.
-# @param $4 Backend port for rejected non-VIP attempt.
-# @param $5 Backend port for accepted non-VIP attempt.
-# @param $6 Backend port for first VIP over --max.
-# @param $7 Backend port for second VIP over --max.
 # @return 0 on success, 1 on failure.
 kc_test_vip_seat_reserve() {
     full_port=$1
@@ -233,8 +210,18 @@ kc_test_index_stop() {
     return 0
 }
 
+# Stops background processes started by the integration suite.
+# @return 0 on success.
+kc_test_cleanup() {
+    pkill -9 -P $$ 2>/dev/null || true
+    pkill -9 -f "bin/x86_64/linux/p2p" 2>/dev/null || true
+    pkill -9 -f "socat TCP-LISTEN:" 2>/dev/null || true
+    pkill -9 -f "nc -u -l -p" 2>/dev/null || true
+    rm -rf "$TMP_ROOT"
+    return 0
+}
+
 # Verifies the index listens only on TCP.
-# @param $1 Index port.
 # @return 0 on success, 1 on failure.
 kc_test_index_tcp_only() {
     port=$1
@@ -251,8 +238,6 @@ kc_test_index_tcp_only() {
 }
 
 # Verifies LIST, LOOKUP, and DEREGISTER over TCP control.
-# @param $1 Index port.
-# @param $2 Backend port.
 # @return 0 on success, 1 on failure.
 kc_test_control_catalog() {
     port=$1
@@ -319,7 +304,6 @@ kc_test_control_catalog() {
 }
 
 # Starts a local TCP echo backend.
-# @param $1 Backend port.
 # @return 0 on success, 1 on failure.
 kc_test_tcp_start() {
     tcp_port=$1
@@ -331,9 +315,6 @@ kc_test_tcp_start() {
 }
 
 # Sends one TCP payload and waits for the echoed reply.
-# @param $1 Destination port.
-# @param $2 Message.
-# @param $3 Output file.
 # @return 0 on success, 1 on failure.
 kc_test_tcp_roundtrip() {
     dst_port=$1
@@ -351,7 +332,6 @@ kc_test_tcp_roundtrip() {
 }
 
 # Starts a local UDP echo backend using netcat.
-# @param $1 Backend port.
 # @return 0 on success, 1 on failure.
 kc_test_udp_start() {
     udp_port=$1
@@ -365,9 +345,6 @@ kc_test_udp_start() {
 }
 
 # Sends one UDP datagram and waits for the echoed reply.
-# @param $1 Destination port.
-# @param $2 Message.
-# @param $3 Output file.
 # @return 0 on success, 1 on failure.
 kc_test_udp_roundtrip() {
     dst_port=$1
@@ -377,10 +354,6 @@ kc_test_udp_roundtrip() {
 }
 
 # Starts a TCP publisher and verifies it stays alive.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_set_tcp() {
     port=$1
@@ -406,11 +379,6 @@ kc_test_set_tcp() {
 }
 
 # Verifies one TCP payload crosses the tunnel.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Listen port.
-# @param $5 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_tcp_echo() {
     port=$1
@@ -449,11 +417,6 @@ kc_test_tcp_echo() {
 }
 
 # Verifies two consecutive TCP requests reuse one running consumer.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Listen port.
-# @param $5 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_tcp_reconnect() {
     port=$1
@@ -498,11 +461,6 @@ kc_test_tcp_reconnect() {
 }
 
 # Verifies a large TCP payload survives byte-for-byte.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Listen port.
-# @param $5 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_tcp_large() {
     port=$1
@@ -543,11 +501,6 @@ kc_test_tcp_large() {
 }
 
 # Verifies dropped TCP DATA frames are recovered by retransmission.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Listen port.
-# @param $5 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_tcp_loss() {
     port=$1
@@ -586,11 +539,6 @@ kc_test_tcp_loss() {
 }
 
 # Verifies dropped DATA frames are recovered in both directions.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Listen port.
-# @param $5 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_tcp_loss_bidir() {
     port=$1
@@ -629,11 +577,6 @@ kc_test_tcp_loss_bidir() {
 }
 
 # Verifies out-of-order TCP DATA frames are reconstructed correctly.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Listen port.
-# @param $5 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_tcp_reorder() {
     port=$1
@@ -674,11 +617,6 @@ kc_test_tcp_reorder() {
 }
 
 # Verifies two concurrent TCP payloads cross the tunnel.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Listen port.
-# @param $5 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_tcp_concurrent() {
     port=$1
@@ -722,10 +660,6 @@ kc_test_tcp_concurrent() {
 }
 
 # Starts a UDP publisher and verifies it stays alive.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_set_udp() {
     port=$1
@@ -751,11 +685,6 @@ kc_test_set_udp() {
 }
 
 # Verifies one UDP roundtrip crosses the tunnel.
-# @param $1 Index port.
-# @param $2 Hostname.
-# @param $3 Backend port.
-# @param $4 Listen port.
-# @param $5 Shared password.
 # @return 0 on success, 1 on failure.
 kc_test_udp_echo() {
     port=$1
@@ -792,16 +721,6 @@ kc_test_udp_echo() {
 }
 
 # Verifies protected registration succeeds and failures are rejected.
-# @param $1 Protected index port for success case.
-# @param $2 Protected index port for wrong password case.
-# @param $3 Protected index port for missing password case.
-# @param $4 Protected index port for pow case.
-# @param $5 Protected index port for public consumer case.
-# @param $6 Backend port for success case.
-# @param $7 Backend port for wrong password case.
-# @param $8 Backend port for missing password case.
-# @param $9 Backend port for public consumer case.
-# @param $10 Listen port for public consumer case.
 # @return 0 on success, 1 on failure.
 kc_test_auth_register() {
     auth_port_ok=$1
@@ -938,12 +857,11 @@ kc_test_main() {
     kc_test_vip_seat_reserve "$vip_seat_port_1" "$vip_seat_port_2" \
         "$vip_seat_port_3" "$vip_seat_backend_1" "$vip_seat_backend_2" \
         "$vip_seat_backend_3" "$vip_seat_backend_4" || return 1
-    pkill -9 -P $$ 2>/dev/null || true
-    wait 2>/dev/null || true
+    kc_test_cleanup
     return 0
 }
 
-trap 'status=$?; pkill -9 -P $$ 2>/dev/null || true; pkill -9 -f "bin/x86_64/linux/p2p" 2>/dev/null || true; rm -rf "$TMP_ROOT"; exit "${status:-0}"' EXIT INT HUP TERM
+trap 'status=$?; kc_test_cleanup; exit "${status:-0}"' EXIT INT HUP TERM
 
 if kc_test_main; then
     exit 0
