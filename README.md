@@ -1,8 +1,6 @@
-# p2p.c - KaisarCode P2P: General P2P communication
+# rp2p.c - RedP2P: Peer-to-peer service tunneling
 
-`p2p.c` is a small and portable C library and CLI for exposing local TCP or UDP services over peer-to-peer connections.
-
-The project was originally called **HolePunchMan**, a name chosen when it was still an experiment focused on NAT hole punching. As the project grew beyond that initial scope into a reusable peer-to-peer communication library, it was renamed **KaisarCode P2P**.
+`rp2p.c` is a small and portable C library and CLI for creating direct encrypted tunnels between peers. A minimal TCP index handles temporary registration, lookup, candidate exchange, and hole-punch coordination, while application data travels directly over UDP. TCP and UDP services are adapted at the edges, keeping the core focused, inspectable, and independent of relays, global identities, or centralized data paths.
 
 ---
 
@@ -13,42 +11,42 @@ The project was originally called **HolePunchMan**, a name chosen when it was st
 Start an index server on port 9876:
 
 ```bash
-p2p idx 9876
+rp2p idx 9876
 ```
 
 Start a public index with registration cost:
 
 ```bash
-p2p idx 9876 --pow 20
+rp2p idx 9876 --pow 20
 ```
 
 Start a publisher-protected index:
 
 ```bash
-P2P_PASS='password' p2p idx 9876
+RP2P_PASS='password' rp2p idx 9876
 ```
 
 Start a publisher-protected index with registration cost:
 
 ```bash
-P2P_PASS='password' p2p idx 9876 --pow 20
+RP2P_PASS='password' rp2p idx 9876 --pow 20
 ```
 
 Start an index with reserved seats that override the global password:
 
 ```bash
-P2P_PASS='global' \
-P2P_VIP='web webpass
+RP2P_PASS='global' \
+RP2P_VIP='web webpass
 admin adminpass' \
-p2p idx 9876
+rp2p idx 9876
 ```
 
 Load the same VIP seat map from a text file:
 
 ```bash
-P2P_PASS='global' \
-P2P_VIP="$(cat ./vip.txt)" \
-p2p idx 9876
+RP2P_PASS='global' \
+RP2P_VIP="$(cat ./vip.txt)" \
+rp2p idx 9876
 ```
 
 With `vip.txt` containing whitespace-separated `<id> <pass>` pairs:
@@ -63,32 +61,32 @@ game gamepass
 Publish a local TCP service on `127.0.0.1:8080`:
 
 ```bash
-p2p set web@idx.example.com:9876 --tcp 8080
+rp2p set web@idx.example.com:9876 --tcp 8080
 ```
 
 Publish with optional STUN discovery enabled on the publisher side:
 
 ```bash
-p2p set web@idx.example.com:9876 --tcp 8080 \
+rp2p set web@idx.example.com:9876 --tcp 8080 \
   --stun stun:stun.cloudflare.com:3478
 ```
 
 Publish to a protected index:
 
 ```bash
-P2P_PASS='password' p2p set web@idx.example.com:9876 --tcp 8080
+RP2P_PASS='password' rp2p set web@idx.example.com:9876 --tcp 8080
 ```
 
 Expose that remote TCP service locally on `127.0.0.1:9000`:
 
 ```bash
-p2p con web@idx.example.com:9876 --tcp 9000
+rp2p con web@idx.example.com:9876 --tcp 9000
 ```
 
 Expose it locally with STUN enabled on the consumer side:
 
 ```bash
-p2p con web@idx.example.com:9876 --tcp 9000 \
+rp2p con web@idx.example.com:9876 --tcp 9000 \
   --stun stun:stun.cloudflare.com:3478
 ```
 
@@ -101,23 +99,23 @@ printf 'ping' | socat - TCP:127.0.0.1:9000
 Remove one announced host from the index:
 
 ```bash
-p2p del web@idx.example.com:9876
+rp2p del web@idx.example.com:9876
 ```
 
 UDP services are exposed the same way:
 
 ```bash
-p2p set game@idx.example.com:9876 --udp 7777
-p2p con game@idx.example.com:9876 --udp 9000
+rp2p set game@idx.example.com:9876 --udp 7777
+rp2p con game@idx.example.com:9876 --udp 9000
 ```
 
 UDP services can use STUN on either side too:
 
 ```bash
-p2p set game@idx.example.com:9876 --udp 7777 \
+rp2p set game@idx.example.com:9876 --udp 7777 \
   --stun stun:stun.cloudflare.com:3478
 
-p2p con game@idx.example.com:9876 --udp 9000 \
+rp2p con game@idx.example.com:9876 --udp 9000 \
   --stun stun:stun.l.google.com:19302
 ```
 
@@ -126,10 +124,10 @@ Once connected, the remote service can be used like any local TCP port:
 ```bash
 # Terminal 1 (publisher side)
 socat TCP-LISTEN:8080,reuseaddr,fork EXEC:cat &
-p2p set web@idx.example.com:9876 --tcp 8080
+rp2p set web@idx.example.com:9876 --tcp 8080
 
 # Terminal 2 (consumer side)
-p2p con web@idx.example.com:9876 --tcp 9000
+rp2p con web@idx.example.com:9876 --tcp 9000
 printf 'ping' | socat - TCP:127.0.0.1:9000
 ```
 
@@ -156,13 +154,13 @@ printf 'ping' | socat - TCP:127.0.0.1:9000
 
 The part before `@` (e.g. `web`, `game`) is an arbitrary label you choose to identify your service in the index.
 It is **not** a system username, and the index does **not** create user accounts or store credentials, it is simply a key in a plain lookup table.
-If nobody has announced `game`, then `p2p con game@idx.example.com:9876` fails with `NOT_FOUND`.
+If nobody has announced `game`, then `rp2p con game@idx.example.com:9876` fails with `NOT_FOUND`.
 The form `game@idx.example.com` is **not** a URL; you cannot open it in a browser, ping it, or connect to it directly.
-It only has meaning inside p2p commands to refer to a registered host on a specific index.
+It only has meaning inside rp2p commands to refer to a registered host on a specific index.
 
-IDs may contain only ASCII letters and digits (`A-Z`, `a-z`, `0-9`). Password tokens used by `P2P_PASS` and `P2P_VIP` are restricted to terminal-safe bytes: letters, digits, and `._-+=,:@%/`.
+IDs may contain only ASCII letters and digits (`A-Z`, `a-z`, `0-9`). Password tokens used by `RP2P_PASS` and `RP2P_VIP` are restricted to terminal-safe bytes: letters, digits, and `._-+=,:@%/`.
 
-`P2P_VIP` is parsed as whitespace-separated `<id> <pass>` pairs, so spaces, tabs, newlines, and blank lines are all treated the same after trimming the full string.
+`RP2P_VIP` is parsed as whitespace-separated `<id> <pass>` pairs, so spaces, tabs, newlines, and blank lines are all treated the same after trimming the full string.
 
 ### How the tunnel works
 
@@ -181,8 +179,8 @@ The `--tcp` and `--udp` flags control how data enters and leaves the tunnel on e
 | `--tcp` | Connects to local TCP service → chunks into P2P encrypted reliable stream frames → sends through UDP hole-punch tunnel | Receives P2P encrypted reliable stream frames → reconstructs ordered byte stream → writes to local TCP client |
 | `--udp` | Receives from local UDP service → forwards directly through hole-punch tunnel | Receives from hole-punch tunnel → forwards directly to local UDP client |
 
-`p2p con` creates a local TCP or UDP listener on `127.0.0.1:<listen_port>`. This listener acts as a transparent bridge to the remote service.
-You never connect directly to the remote machine; every connection or datagram goes to `127.0.0.1:<listen_port>`, and p2p forwards it through
+`rp2p con` creates a local TCP or UDP listener on `127.0.0.1:<listen_port>`. This listener acts as a transparent bridge to the remote service.
+You never connect directly to the remote machine; every connection or datagram goes to `127.0.0.1:<listen_port>`, and rp2p forwards it through
 the UDP transport path to the publisher's backend. From your perspective, the remote service behaves exactly like a local process on that port.
 Any tool that speaks TCP or UDP works against the bridge without modification.
 
@@ -203,37 +201,37 @@ sessions may fail instead of degrading to a relay.
 ## Public API
 
 ```c
-#include "p2p.h"
+#include "rp2p.h"
 
-kc_p2p_t *ctx;
-kc_p2p_open(&ctx);
+rp2p_t *ctx;
+rp2p_open(&ctx);
 
-kc_p2p_set_pow(ctx, 0);
-kc_p2p_set_pass(ctx, "password");
+rp2p_set_pow(ctx, 0);
+rp2p_set_pass(ctx, "password");
 
-kc_p2p_serve_index(ctx, "0.0.0.0", 9876);
+rp2p_serve_index(ctx, "0.0.0.0", 9876);
 
-kc_p2p_close(ctx);
+rp2p_close(ctx);
 ```
 
 ---
 
 ## Lifecycle
 
-- `kc_p2p_open()` - allocates and returns a new context owned by the caller.
-- `kc_p2p_options_default()` - returns a default options struct for env-backed CLI/runtime configuration.
-- `kc_p2p_options_load_env()` - loads `P2P_*` environment values into an options struct.
-- `kc_p2p_serve_index()` - starts the index server. Blocking, never returns on success.
-- `kc_p2p_deregister()` - removes one host from an index using the stored key.
-- `kc_p2p_connect()` - opens a local TCP listener or UDP bridge and creates one peer session per accepted local client or datagram source.
-- `kc_p2p_wait()` - registers one host, waits for incoming punch requests, and bridges each session to one local TCP backend or UDP socket.
-- `kc_p2p_set_pow()` - configures the `REGISTER` proof difficulty.
-- `kc_p2p_set_pass()` - configures the shared password used to derive `REGISTER` proofs.
-- `kc_p2p_set_port()` - sets the local service or bridge port used by `set`/`con`.
-- `kc_p2p_set_protocol()` - selects TCP or UDP mode before `kc_p2p_wait()` or `kc_p2p_connect()`.
-- `kc_p2p_set_sweep()` - sets the UDP port sweep range used during punch fallback.
-- `kc_p2p_set_stun_url()` - enables optional STUN discovery for `srflx` candidates.
-- `kc_p2p_close()` - releases the context.
+- `rp2p_open()` - allocates and returns a new context owned by the caller.
+- `rp2p_options_default()` - returns a default options struct for env-backed CLI/runtime configuration.
+- `rp2p_options_load_env()` - loads `RP2P_*` environment values into an options struct.
+- `rp2p_serve_index()` - starts the index server. Blocking, never returns on success.
+- `rp2p_deregister()` - removes one host from an index using the stored key.
+- `rp2p_connect()` - opens a local TCP listener or UDP bridge and creates one peer session per accepted local client or datagram source.
+- `rp2p_wait()` - registers one host, waits for incoming punch requests, and bridges each session to one local TCP backend or UDP socket.
+- `rp2p_set_pow()` - configures the `REGISTER` proof difficulty.
+- `rp2p_set_pass()` - configures the shared password used to derive `REGISTER` proofs.
+- `rp2p_set_port()` - sets the local service or bridge port used by `set`/`con`.
+- `rp2p_set_protocol()` - selects TCP or UDP mode before `rp2p_wait()` or `rp2p_connect()`.
+- `rp2p_set_sweep()` - sets the UDP port sweep range used during punch fallback.
+- `rp2p_set_stun_url()` - enables optional STUN discovery for `srflx` candidates.
+- `rp2p_close()` - releases the context.
 
 ---
 
@@ -286,12 +284,12 @@ The deregistration key is generated by the index automatically and stored locall
 
 ## Proof-of-Work
 
-By default, the index is a lightweight public rendezvous server with no authentication. When P2P_PASS is set, REGISTER requires a password-derived proof.
+By default, the index is a lightweight public rendezvous server with no authentication. When RP2P_PASS is set, REGISTER requires a password-derived proof.
 Anyone can send REGISTER and occupy a seat. PoW prevents casual or scripted abuse by requiring a computational cost per registration.
 It does not stop a determined attacker (e.g. a botnet), but it raises the cost of filling the peer table from near-zero to hours of CPU time.
 
 Each new publisher registration receives a random 8-byte nonce and must answer a challenge using a proof derived from `nonce_hex || self_id || solution_hex`.
-The proof is always HMAC-SHA256 keyed by `P2P_PASS`. On a public index, `P2P_PASS` is the empty string. Heartbeats from already-registered peers skip the challenge.
+The proof is always HMAC-SHA256 keyed by `RP2P_PASS`. On a public index, `RP2P_PASS` is the empty string. Heartbeats from already-registered peers skip the challenge.
 
 ### Wire
 
@@ -305,51 +303,51 @@ I -> C: OK:KEY:<hex>
 ### CLI
 
 ```bash
-p2p idx 9876                      # PoW 0 bits (default)
-p2p idx 9876 --pow 20             # PoW 20 bits
-P2P_PASS='password' p2p idx 9876
-P2P_PASS='password' p2p idx 9876 --pow 20
-P2P_PASS='global' P2P_VIP='web webpass admin adminpass' p2p idx 9876
+rp2p idx 9876                      # PoW 0 bits (default)
+rp2p idx 9876 --pow 20             # PoW 20 bits
+RP2P_PASS='password' rp2p idx 9876
+RP2P_PASS='password' rp2p idx 9876 --pow 20
+RP2P_PASS='global' RP2P_VIP='web webpass admin adminpass' rp2p idx 9876
 ```
 
 ### Environment
 
 | Variable | Description |
 | :--- | :--- |
-| `P2P_POW=0` | PoW bits for index registration (overridden by `--pow` flag). |
-| `P2P_PASS=password` | Optional shared password used to protect server registration. |
-| `P2P_VIP='id pass id pass ...'` | Reserved seat passwords parsed as whitespace-separated `<id> <pass>` pairs. |
-| `P2P_SWEEP=32` | UDP port sweep range used during punch fallback. |
-| `P2P_STUN=stun:host:port` | Optional STUN server used to discover `srflx` automatically. |
-| `P2P_SEATS=1024` | Max announced peers on the index server (overridden by `--max`). |
+| `RP2P_POW=0` | PoW bits for index registration (overridden by `--pow` flag). |
+| `RP2P_PASS=password` | Optional shared password used to protect server registration. |
+| `RP2P_VIP='id pass id pass ...'` | Reserved seat passwords parsed as whitespace-separated `<id> <pass>` pairs. |
+| `RP2P_SWEEP=32` | UDP port sweep range used during punch fallback. |
+| `RP2P_STUN=stun:host:port` | Optional STUN server used to discover `srflx` automatically. |
+| `RP2P_SEATS=1024` | Max announced peers on the index server (overridden by `--max`). |
 
 Internal debug-only environment knobs used for fault-injection tests:
 
-- `P2P_DEBUG_STREAM=1` enables detailed stream logs.
-- `P2P_DEBUG_STREAM_DROP_EVERY=N` drops every Nth TCP stream DATA frame once.
-- `P2P_DEBUG_STREAM_REORDER_EVERY=N` delays every Nth TCP stream DATA frame once so the next frame arrives first.
+- `RP2P_DEBUG_STREAM=1` enables detailed stream logs.
+- `RP2P_DEBUG_STREAM_DROP_EVERY=N` drops every Nth TCP stream DATA frame once.
+- `RP2P_DEBUG_STREAM_REORDER_EVERY=N` delays every Nth TCP stream DATA frame once so the next frame arrives first.
 
-`P2P_INDEX` and `P2P_BIND` are parsed by the options loader internally, but the current CLI still requires explicit positional arguments for the index address and explicit command flags for bind behavior.
+`RP2P_INDEX` and `P2P_BIND` are parsed by the options loader internally, but the current CLI still requires explicit positional arguments for the index address and explicit command flags for bind behavior.
 
-When `P2P_VIP` defines a password for one seat, that seat must use its VIP password and no longer accepts the global `P2P_PASS`. VIP seats are reserved at index startup and keep their place even while offline.
-Seats not listed in `P2P_VIP` still use the global `P2P_PASS`, but they may only occupy the non-VIP capacity left after VIP reservations.
-The effective non-VIP capacity is `max(0, --max - vip_count)`. `P2P_VIP` may define more IDs than `--max`; in that case no non-VIP seats remain, but the listed VIP IDs may still register with their own passwords.
-If `P2P_VIP` repeats an ID or contains an invalid ID/password token, `p2p idx` fails at startup.
+When `RP2P_VIP` defines a password for one seat, that seat must use its VIP password and no longer accepts the global `RP2P_PASS`. VIP seats are reserved at index startup and keep their place even while offline.
+Seats not listed in `RP2P_VIP` still use the global `RP2P_PASS`, but they may only occupy the non-VIP capacity left after VIP reservations.
+The effective non-VIP capacity is `max(0, --max - vip_count)`. `RP2P_VIP` may define more IDs than `--max`; in that case no non-VIP seats remain, but the listed VIP IDs may still register with their own passwords.
+If `RP2P_VIP` repeats an ID or contains an invalid ID/password token, `rp2p idx` fails at startup.
 
 Examples:
 
 ```bash
-P2P_PASS='global' P2P_VIP='web webpass' p2p idx 9876
+RP2P_PASS='global' RP2P_VIP='web webpass' rp2p idx 9876
 
-P2P_PASS='webpass' p2p set web@idx.example.com:9876 --tcp 8080
-P2P_PASS='global' p2p set blog@idx.example.com:9876 --tcp 8080
+RP2P_PASS='webpass' rp2p set web@idx.example.com:9876 --tcp 8080
+RP2P_PASS='global' rp2p set blog@idx.example.com:9876 --tcp 8080
 ```
 
 ### API
 
 ```c
-kc_p2p_set_pow(ctx, 0);
-kc_p2p_set_pass(ctx, "password");
+rp2p_set_pow(ctx, 0);
+rp2p_set_pass(ctx, "password");
 ```
 
 ### Cost reference
@@ -363,7 +361,7 @@ kc_p2p_set_pass(ctx, "password");
 | 28 | 268M | ~50s | ~8min | ~1h |
 | 32 | 4G | ~15min | ~2h | ~24h |
 
-`P2P_PASS` only controls who may register services in the index. It does not authenticate consumers, encrypt tunnel traffic, or replace application-level authentication.
+`RP2P_PASS` only controls who may register services in the index. It does not authenticate consumers, encrypt tunnel traffic, or replace application-level authentication.
 
 ---
 
@@ -421,13 +419,13 @@ make loongarch64/linux
 
 ## Project scope
 
-libkcp2p.c is built around a small and specific goal: coordinate peers, establish a direct connection between them, and keep third-party infrastructure outside the application data path.
+librp2p.c is built around a small and specific goal: coordinate peers, establish a direct connection between them, and keep third-party infrastructure outside the application data path.
 
 Its surface is intentionally limited. There is no large collection of modules to evaluate, no set of interchangeable networking stacks to assemble, and no need to become an expert in a complete ecosystem before establishing a connection. The API exposes a small set of operations, the connection flow is concrete, and the implementation can be inspected directly.
 
 A well-known project in the broader peer-to-peer networking space is [libp2p](https://libp2p.io/). It is an established modular stack designed to support many kinds of P2P systems through a broad collection of transports, secure channels, stream multiplexers, discovery and routing mechanisms, NAT traversal protocols, relays, and other components.
 
-libkcp2p.c does not attempt to replace libp2p or reproduce its scope. Applications that need a general, extensible, and interoperable P2P networking platform may be better served by libp2p. libkcp2p.c is intended for applications that need direct peer connectivity through a smaller component with fewer concepts, fewer decisions, and a shorter learning curve.
+librp2p.c does not attempt to replace libp2p or reproduce its scope. Applications that need a general, extensible, and interoperable P2P networking platform may be better served by libp2p. librp2p.c is intended for applications that need direct peer connectivity through a smaller component with fewer concepts, fewer decisions, and a shorter learning curve.
 
 ---
 

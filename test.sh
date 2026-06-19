@@ -5,7 +5,7 @@
 # Website: https://kaisarcode.com
 # License: https://www.gnu.org/licenses/gpl-3.0.html
 
-BIN=bin/x86_64/linux/p2p
+BIN=bin/x86_64/linux/rp2p
 PASS=0
 FAIL=0
 status=0
@@ -35,8 +35,8 @@ kc_test_pass() {
 # @return 0 on success.
 kc_test_ensure_binary() {
     if [ ! -x "$BIN" ]; then printf 'prerequisite: p2p not found at %s\n' "$BIN" >&2; return 1; fi
-    if [ ! -f "bin/x86_64/linux/libkcp2p.a" ]; then printf 'prerequisite: libkcp2p.a not found\n' >&2; return 1; fi
-    if [ ! -f "bin/x86_64/linux/libkcp2p.so" ]; then printf 'prerequisite: libkcp2p.so not found\n' >&2; return 1; fi
+    if [ ! -f "bin/x86_64/linux/librp2p.a" ]; then printf 'prerequisite: librp2p.a not found\n' >&2; return 1; fi
+    if [ ! -f "bin/x86_64/linux/librp2p.so" ]; then printf 'prerequisite: librp2p.so not found\n' >&2; return 1; fi
     return 0
 }
 
@@ -49,11 +49,11 @@ kc_test_index_start() {
     label=$4
     vip_text=$5
     if [ -n "$pass_key" ] && [ -n "$vip_text" ]; then
-        P2P_PASS="$pass_key" P2P_VIP="$vip_text" "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx-$label.log" 2>&1 &
+        RP2P_PASS="$pass_key" RP2P_VIP="$vip_text" "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx-$label.log" 2>&1 &
     elif [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx-$label.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx-$label.log" 2>&1 &
     elif [ -n "$vip_text" ]; then
-        P2P_VIP="$vip_text" "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx-$label.log" 2>&1 &
+        RP2P_VIP="$vip_text" "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx-$label.log" 2>&1 &
     else
         "$BIN" idx "$port" --pow "$pow_bits" > "$TMP_ROOT/idx-$label.log" 2>&1 &
     fi
@@ -86,7 +86,7 @@ kc_test_vip_register() {
 
     kc_test_index_start "$vip_port_bad" 0 global vip-wrong-pass "$vip_text" || return 1
     kc_test_tcp_start "$vip_backend_bad" || return 1
-    P2P_PASS=global "$BIN" set vipseat@127.0.0.1:"$vip_port_bad" --tcp "$vip_backend_bad" > "$TMP_ROOT/vip-bad.log" 2>&1 &
+    RP2P_PASS=global "$BIN" set vipseat@127.0.0.1:"$vip_port_bad" --tcp "$vip_backend_bad" > "$TMP_ROOT/vip-bad.log" 2>&1 &
     spid=$!
     _i=0
     while [ "$_i" -lt 10 ]; do
@@ -110,25 +110,25 @@ kc_test_vip_register() {
     kc_test_index_stop
     kc_test_pass "VIP global fallback: non-VIP seat uses global pass"
 
-    if P2P_PASS=global P2P_VIP='vipseat' "$BIN" idx "$vip_port_odd" > "$TMP_ROOT/vip-odd.log" 2>&1; then
+    if RP2P_PASS=global RP2P_VIP='vipseat' "$BIN" idx "$vip_port_odd" > "$TMP_ROOT/vip-odd.log" 2>&1; then
         kc_test_fail "VIP odd token count (1 token): expected index to reject, got exit 0"
         return 1
     fi
     kc_test_pass "VIP reject odd token count"
 
-    if P2P_PASS=global P2P_VIP='vipseat one vipseat two' "$BIN" idx "$vip_port_dup" > "$TMP_ROOT/vip-dup.log" 2>&1; then
+    if RP2P_PASS=global RP2P_VIP='vipseat one vipseat two' "$BIN" idx "$vip_port_dup" > "$TMP_ROOT/vip-dup.log" 2>&1; then
         kc_test_fail "VIP duplicate seat name: expected index to reject, got exit 0"
         return 1
     fi
     kc_test_pass "VIP reject duplicate seat name"
 
-    if P2P_PASS=global P2P_VIP='bad:id nope' "$BIN" idx "$vip_port_invalid" > "$TMP_ROOT/vip-invalid.log" 2>&1; then
+    if RP2P_PASS=global RP2P_VIP='bad:id nope' "$BIN" idx "$vip_port_invalid" > "$TMP_ROOT/vip-invalid.log" 2>&1; then
         kc_test_fail "VIP invalid seat name (colon): expected index to reject, got exit 0"
         return 1
     fi
     kc_test_pass "VIP reject invalid seat name (colon)"
 
-    if P2P_PASS=global P2P_VIP='vipseat bad`tick' "$BIN" idx "$vip_port_invalid" > "$TMP_ROOT/vip-invalid-pass.log" 2>&1; then
+    if RP2P_PASS=global RP2P_VIP='vipseat bad`tick' "$BIN" idx "$vip_port_invalid" > "$TMP_ROOT/vip-invalid-pass.log" 2>&1; then
         kc_test_fail "VIP invalid password (backtick): expected index to reject, got exit 0"
         return 1
     fi
@@ -148,7 +148,7 @@ kc_test_vip_seat_reserve() {
     over_backend_1=$6
     over_backend_2=$7
 
-    P2P_VIP='vip vip-pass' "$BIN" idx "$full_port" --max 1 --pow 0 > "$TMP_ROOT/vip-seat-full-idx.log" 2>&1 &
+    RP2P_VIP='vip vip-pass' "$BIN" idx "$full_port" --max 1 --pow 0 > "$TMP_ROOT/vip-seat-full-idx.log" 2>&1 &
     IPID=$!
     if ! kc_test_wait_port "$full_port"; then
         kc_test_fail "VIP seat reserve: expected index on port $full_port, did not start"
@@ -174,7 +174,7 @@ kc_test_vip_seat_reserve() {
     kc_test_index_stop
     kc_test_pass "VIP seat reserve: non-VIP rejected when max=1 with VIP seat"
 
-    P2P_VIP='vip vip-pass' "$BIN" idx "$open_port" --max 2 --pow 0 > "$TMP_ROOT/vip-seat-open-idx.log" 2>&1 &
+    RP2P_VIP='vip vip-pass' "$BIN" idx "$open_port" --max 2 --pow 0 > "$TMP_ROOT/vip-seat-open-idx.log" 2>&1 &
     IPID=$!
     if ! kc_test_wait_port "$open_port"; then
         kc_test_fail "VIP seat reserve: expected index on port $open_port, did not start"
@@ -184,7 +184,7 @@ kc_test_vip_seat_reserve() {
     kc_test_index_stop
     kc_test_pass "VIP seat reserve: non-VIP accepted when max=2 with VIP seat"
 
-    P2P_VIP='vip1 pass1 vip2 pass2' "$BIN" idx "$over_port" --max 1 --pow 0 > "$TMP_ROOT/vip-seat-over-idx.log" 2>&1 &
+    RP2P_VIP='vip1 pass1 vip2 pass2' "$BIN" idx "$over_port" --max 1 --pow 0 > "$TMP_ROOT/vip-seat-over-idx.log" 2>&1 &
     IPID=$!
     if ! kc_test_wait_port "$over_port"; then
         kc_test_fail "VIP seat reserve: expected index on port $over_port, did not start"
@@ -212,7 +212,7 @@ kc_test_index_stop() {
 # @return 0 on success.
 kc_test_cleanup() {
     pkill -9 -P $$ 2>/dev/null || true
-    pkill -9 -f "bin/x86_64/linux/p2p" 2>/dev/null || true
+    pkill -9 -f "bin/x86_64/linux/rp2p" 2>/dev/null || true
     pkill -9 -f "socat TCP-LISTEN:" 2>/dev/null || true
     pkill -9 -f "nc -u -l -p" 2>/dev/null || true
     rm -rf "$TMP_ROOT"
@@ -345,7 +345,7 @@ kc_test_control_catalog() {
     fi
     kc_test_pass "control reject command without HELLO"
 
-    if ! printf 'HELLO KCP2P/0\n' | nc -w 2 127.0.0.1 "$port" > "$old_hello_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/0\n' | nc -w 2 127.0.0.1 "$port" > "$old_hello_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control old protocol HELLO: expected ERROR:version mismatch, nc failed"
         return 1
@@ -355,9 +355,9 @@ kc_test_control_catalog() {
         kc_test_fail "control old protocol HELLO (v0): expected ERROR:version mismatch, got $(tr '\n' '|' < "$old_hello_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control reject HELLO KCP2P/0"
+    kc_test_pass "control reject HELLO RP2P/0"
 
-    if ! printf 'HELLO KCP2P/2\n' | nc -w 2 127.0.0.1 "$port" > "$new_hello_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/2\n' | nc -w 2 127.0.0.1 "$port" > "$new_hello_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control new protocol HELLO: expected ERROR:version mismatch, nc failed"
         return 1
@@ -367,21 +367,21 @@ kc_test_control_catalog() {
         kc_test_fail "control new protocol HELLO (v2): expected ERROR:version mismatch, got $(tr '\n' '|' < "$new_hello_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control reject HELLO KCP2P/2"
+    kc_test_pass "control reject HELLO RP2P/2"
 
-    if ! printf 'HELLO KCP2P/x\n' | nc -w 2 127.0.0.1 "$port" > "$bad_hello_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/x\n' | nc -w 2 127.0.0.1 "$port" > "$bad_hello_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control malformed HELLO version: expected ERROR:version mismatch, nc failed"
         return 1
     fi
     if ! grep -q '^ERROR:version mismatch$' "$bad_hello_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control malformed HELLO version (KCP2P/x): expected ERROR:version mismatch, got $(tr '\n' '|' < "$bad_hello_out" | head -c 60)"
+        kc_test_fail "control malformed HELLO version (RP2P/x): expected ERROR:version mismatch, got $(tr '\n' '|' < "$bad_hello_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control reject HELLO KCP2P/x"
+    kc_test_pass "control reject HELLO RP2P/x"
 
-    if ! printf 'HELLO KCP2P/1\nHELLO KCP2P/1\n' | nc -w 2 127.0.0.1 "$port" > "$repeat_hello_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nHELLO RP2P/1\n' | nc -w 2 127.0.0.1 "$port" > "$repeat_hello_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control repeat HELLO: expected OK:HELLO then ERROR:version mismatch, nc failed"
         return 1
@@ -393,7 +393,7 @@ kc_test_control_catalog() {
     fi
     kc_test_pass "control reject duplicate HELLO"
 
-    if ! printf 'HELLO KCP2P/1\nLIST\n' | nc -w 2 127.0.0.1 "$port" > "$list_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nLIST\n' | nc -w 2 127.0.0.1 "$port" > "$list_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control LIST after register: expected PEER line, nc failed"
         return 1
@@ -405,7 +405,7 @@ kc_test_control_catalog() {
     fi
     kc_test_pass "control LIST returns registered peer"
 
-    if ! printf 'HELLO KCP2P/1\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$lookup_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$lookup_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control LOOKUP existing peer: expected PEER:control, nc failed"
         return 1
@@ -417,7 +417,7 @@ kc_test_control_catalog() {
     fi
     kc_test_pass "control LOOKUP returns registered peer"
 
-    if ! printf 'HELLO KCP2P/1\nLOOKUP:control:extra\n' | nc -w 2 127.0.0.1 "$port" > "$bad_lookup_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nLOOKUP:control:extra\n' | nc -w 2 127.0.0.1 "$port" > "$bad_lookup_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control LOOKUP with extra fields: expected ERROR:malformed, nc failed"
         return 1
@@ -429,7 +429,7 @@ kc_test_control_catalog() {
     fi
     kc_test_pass "control reject malformed LOOKUP"
 
-    if ! printf 'HELLO KCP2P/1\nLIST\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$multi_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nLIST\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$multi_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control multi-command (LIST + LOOKUP): expected PEER lines, nc failed"
         return 1
@@ -441,7 +441,7 @@ kc_test_control_catalog() {
     fi
     kc_test_pass "control multi-command pipelining"
 
-    if ! printf 'HELLO KCP2P/1\nPUNCH_REQ2:c-1:control:abc\nCAND:bad:127.0.0.1:1\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$bad_punch_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nPUNCH_REQ2:c-1:control:abc\nCAND:bad:127.0.0.1:1\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$bad_punch_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control PUNCH_REQ2 with bad candidate: expected ERROR:malformed, nc failed"
         return 1
@@ -460,7 +460,7 @@ kc_test_control_catalog() {
     fi
     kc_test_pass "control DEREGISTER via CLI"
 
-    if ! printf 'HELLO KCP2P/1\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$miss_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$miss_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
         kc_test_fail "control LOOKUP after deregister: expected NOT_FOUND, nc failed"
         return 1
@@ -490,7 +490,7 @@ kc_test_ipv6_loopback() {
         return 0
     fi
     kc_test_index_start "$port" 0 "" ipv6 || return 1
-    if ! printf 'HELLO KCP2P/1\nLIST\n' | socat -t 2 - "TCP6:[::1]:$port" > "$list_out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nLIST\n' | socat -t 2 - "TCP6:[::1]:$port" > "$list_out" 2>/dev/null; then
         kc_test_index_stop
         kc_test_fail "IPv6 control over [::1]:$port: expected successful LIST via TCP6, socat failed"
         return 1
@@ -639,7 +639,7 @@ kc_test_set_tcp() {
     pass_key=$4
     kc_test_tcp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/set-$host.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/set-$host.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/set-$host.log" 2>&1 &
     fi
@@ -669,7 +669,7 @@ kc_test_tcp_echo() {
 
     kc_test_tcp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/tcp-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/tcp-set.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/tcp-set.log" 2>&1 &
     fi
@@ -729,7 +729,7 @@ kc_test_tcp_reconnect() {
 
     kc_test_tcp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/reconnect-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/reconnect-set.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/reconnect-set.log" 2>&1 &
     fi
@@ -784,7 +784,7 @@ kc_test_tcp_large() {
     dd if=/dev/urandom of="$in" bs=1048576 count=10 status=none || return 1
     kc_test_tcp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/large-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/large-set.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/large-set.log" 2>&1 &
     fi
@@ -828,14 +828,14 @@ kc_test_tcp_loss() {
 
     kc_test_tcp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-set.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-set.log" 2>&1 &
     fi
     spid=$!
     kc_test_wait_pid "$spid" || { kc_test_kill "$HPID"; kc_test_fail "TCP loss $host: publisher failed to start"; return 1; }
     kc_test_wait_published "$TMP_ROOT/loss-set.log" || { kc_test_kill "$HPID"; kc_test_fail "TCP loss $host: publisher registration timeout"; return 1; }
-    P2P_DEBUG_STREAM_DROP_EVERY=1 "$BIN" con "${host}@127.0.0.1:${port}" --tcp "$listen_port" > "$TMP_ROOT/loss-con.log" 2>&1 &
+    RP2P_DEBUG_STREAM_DROP_EVERY=1 "$BIN" con "${host}@127.0.0.1:${port}" --tcp "$listen_port" > "$TMP_ROOT/loss-con.log" 2>&1 &
     cpid=$!
     if ! kc_test_wait_port "$listen_port" 20; then
         kc_test_kill "$spid" "$cpid" "$HPID"
@@ -871,14 +871,14 @@ kc_test_tcp_loss_bidir() {
 
     kc_test_tcp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" P2P_DEBUG_STREAM_DROP_EVERY=1 "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-bidir-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" RP2P_DEBUG_STREAM_DROP_EVERY=1 "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-bidir-set.log" 2>&1 &
     else
-        P2P_DEBUG_STREAM_DROP_EVERY=1 "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-bidir-set.log" 2>&1 &
+        RP2P_DEBUG_STREAM_DROP_EVERY=1 "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-bidir-set.log" 2>&1 &
     fi
     spid=$!
     kc_test_wait_pid "$spid" || { kc_test_kill "$HPID"; kc_test_fail "TCP loss bidirectional $host: publisher failed to start"; return 1; }
     kc_test_wait_published "$TMP_ROOT/loss-bidir-set.log" || { kc_test_kill "$HPID"; kc_test_fail "TCP loss bidirectional $host: publisher registration timeout"; return 1; }
-    P2P_DEBUG_STREAM_DROP_EVERY=1 "$BIN" con "${host}@127.0.0.1:${port}" --tcp "$listen_port" > "$TMP_ROOT/loss-bidir-con.log" 2>&1 &
+    RP2P_DEBUG_STREAM_DROP_EVERY=1 "$BIN" con "${host}@127.0.0.1:${port}" --tcp "$listen_port" > "$TMP_ROOT/loss-bidir-con.log" 2>&1 &
     cpid=$!
     if ! kc_test_wait_port "$listen_port" 20; then
         kc_test_kill "$spid" "$cpid" "$HPID"
@@ -916,14 +916,14 @@ kc_test_tcp_reorder() {
     dd if=/dev/urandom of="$in" bs=4096 count=1 status=none || return 1
     kc_test_tcp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/reorder-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/reorder-set.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/reorder-set.log" 2>&1 &
     fi
     spid=$!
     kc_test_wait_pid "$spid" || { kc_test_kill "$HPID"; kc_test_fail "TCP reorder $host: publisher failed to start"; return 1; }
     kc_test_wait_published "$TMP_ROOT/reorder-set.log" || { kc_test_kill "$HPID"; kc_test_fail "TCP reorder $host: publisher registration timeout"; return 1; }
-    P2P_DEBUG_STREAM_REORDER_EVERY=1 "$BIN" con "${host}@127.0.0.1:${port}" --tcp "$listen_port" > "$TMP_ROOT/reorder-con.log" 2>&1 &
+    RP2P_DEBUG_STREAM_REORDER_EVERY=1 "$BIN" con "${host}@127.0.0.1:${port}" --tcp "$listen_port" > "$TMP_ROOT/reorder-con.log" 2>&1 &
     cpid=$!
     if ! kc_test_wait_port "$listen_port" 20; then
         kc_test_kill "$spid" "$cpid" "$HPID"
@@ -961,7 +961,7 @@ kc_test_tcp_concurrent() {
 
     kc_test_tcp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/concurrent-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/concurrent-set.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/concurrent-set.log" 2>&1 &
     fi
@@ -1010,7 +1010,7 @@ kc_test_set_udp() {
     pass_key=$4
     kc_test_udp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --udp "$backend_port" > "$TMP_ROOT/set-udp-$host.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --udp "$backend_port" > "$TMP_ROOT/set-udp-$host.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --udp "$backend_port" > "$TMP_ROOT/set-udp-$host.log" 2>&1 &
     fi
@@ -1040,7 +1040,7 @@ kc_test_udp_echo() {
 
     kc_test_udp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --udp "$backend_port" > "$TMP_ROOT/udp-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --udp "$backend_port" > "$TMP_ROOT/udp-set.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --udp "$backend_port" > "$TMP_ROOT/udp-set.log" 2>&1 &
     fi
@@ -1088,7 +1088,7 @@ kc_test_auth_register() {
     kc_test_index_stop
     kc_test_index_start "$auth_port_bad" 0 abc auth-wrong-pass || return 1
     kc_test_tcp_start "$auth_backend_bad" || return 1
-    P2P_PASS=wrong "$BIN" set authbad@127.0.0.1:"$auth_port_bad" --tcp "$auth_backend_bad" > "$TMP_ROOT/auth-bad.log" 2>&1 &
+    RP2P_PASS=wrong "$BIN" set authbad@127.0.0.1:"$auth_port_bad" --tcp "$auth_backend_bad" > "$TMP_ROOT/auth-bad.log" 2>&1 &
     spid=$!
     _i=0
     while [ "$_i" -lt 10 ]; do
@@ -1152,7 +1152,7 @@ kc_test_udp_large() {
 
     kc_test_udp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --udp "$backend_port" > "$TMP_ROOT/udp-large-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" "$BIN" set "${host}@127.0.0.1:${port}" --udp "$backend_port" > "$TMP_ROOT/udp-large-set.log" 2>&1 &
     else
         "$BIN" set "${host}@127.0.0.1:${port}" --udp "$backend_port" > "$TMP_ROOT/udp-large-set.log" 2>&1 &
     fi
@@ -1196,9 +1196,9 @@ kc_test_tcp_loss_moderate() {
     dd if=/dev/urandom of="$in" bs=131072 count=1 status=none || return 1
     kc_test_tcp_start "$backend_port" || return 1
     if [ -n "$pass_key" ]; then
-        P2P_PASS="$pass_key" P2P_DEBUG_STREAM_DROP_EVERY=20 "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-moderate-set.log" 2>&1 &
+        RP2P_PASS="$pass_key" RP2P_DEBUG_STREAM_DROP_EVERY=20 "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-moderate-set.log" 2>&1 &
     else
-        P2P_DEBUG_STREAM_DROP_EVERY=20 "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-moderate-set.log" 2>&1 &
+        RP2P_DEBUG_STREAM_DROP_EVERY=20 "$BIN" set "${host}@127.0.0.1:${port}" --tcp "$backend_port" > "$TMP_ROOT/loss-moderate-set.log" 2>&1 &
     fi
     spid=$!
     kc_test_wait_pid "$spid" || { kc_test_kill "$HPID"; kc_test_fail "TCP loss moderate $host: publisher failed to start"; return 1; }
@@ -1233,7 +1233,7 @@ kc_test_tcp_loss_moderate() {
 kc_test_protocol_vectors() {
     port=$1
     out="$TMP_ROOT/proto-unknown.out"
-    if ! printf 'HELLO KCP2P/1\nBOGUS\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nBOGUS\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol unknown command BOGUS: expected ERROR:unknown command, nc failed"
         return 1
     fi
@@ -1243,7 +1243,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol reject unknown command"
     out="$TMP_ROOT/proto-reg-bad-id.out"
-    if ! printf 'HELLO KCP2P/1\nREGISTER:bad id\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nREGISTER:bad id\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol REGISTER with spaces in id: expected ERROR:invalid id, nc failed"
         return 1
     fi
@@ -1253,7 +1253,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol reject REGISTER with space in id"
     out="$TMP_ROOT/proto-reg-colon-id.out"
-    if ! printf 'HELLO KCP2P/1\nREGISTER:bad:id\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nREGISTER:bad:id\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol REGISTER with colon in id: expected ERROR:invalid id, nc failed"
         return 1
     fi
@@ -1263,7 +1263,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol reject REGISTER with colon in id"
     out="$TMP_ROOT/proto-reg-empty.out"
-    if ! printf 'HELLO KCP2P/1\nREGISTER:\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nREGISTER:\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol REGISTER with empty id: expected ERROR:invalid id, nc failed"
         return 1
     fi
@@ -1273,7 +1273,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol reject REGISTER with empty id"
     out="$TMP_ROOT/proto-reg-valid.out"
-    if ! printf 'HELLO KCP2P/1\nREGISTER:validproto\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nREGISTER:validproto\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol REGISTER valid id: expected CHALLENGE response, nc failed"
         return 1
     fi
@@ -1288,7 +1288,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol REGISTER valid id returns CHALLENGE"
     out="$TMP_ROOT/proto-reg-bad-sol.out"
-    if ! printf 'HELLO KCP2P/1\nREGISTER:badproof:SOLUTION:xx:PROOF:yy\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nREGISTER:badproof:SOLUTION:xx:PROOF:yy\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol REGISTER with bad proof: expected AUTH_FAILED, nc failed"
         return 1
     fi
@@ -1298,7 +1298,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol REGISTER bad proof returns AUTH_FAILED"
     out="$TMP_ROOT/proto-list-extra.out"
-    if ! printf 'HELLO KCP2P/1\nLIST:extra\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nLIST:extra\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol LIST with extra fields: expected ERROR:malformed, nc failed"
         return 1
     fi
@@ -1308,7 +1308,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol reject LIST with extra fields"
     out="$TMP_ROOT/proto-dereg-no-key.out"
-    if ! printf 'HELLO KCP2P/1\nDEREGISTER:test\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nDEREGISTER:test\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol DEREGISTER without key: expected ERROR:malformed, nc failed"
         return 1
     fi
@@ -1318,7 +1318,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol reject DEREGISTER without key"
     out="$TMP_ROOT/proto-dereg-bad-key.out"
-    if ! printf 'HELLO KCP2P/1\nDEREGISTER:nonexistent:KEY:abc\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nDEREGISTER:nonexistent:KEY:abc\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol DEREGISTER nonexistent with bad key: expected ERROR:invalid key, nc failed"
         return 1
     fi
@@ -1328,7 +1328,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol reject DEREGISTER with nonexistent key"
     out="$TMP_ROOT/proto-punch-bad-self.out"
-    if ! printf 'HELLO KCP2P/1\nPUNCH_REQ2:bad@self:target:sess\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nPUNCH_REQ2:bad@self:target:sess\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol PUNCH_REQ2 with @ in self id: expected ERROR:malformed, nc failed"
         return 1
     fi
@@ -1338,7 +1338,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol reject PUNCH_REQ2 with @ in self id"
     out="$TMP_ROOT/proto-punch-extra.out"
-    if ! printf 'HELLO KCP2P/1\nPUNCH_REQ2:c-1:target:sess:extra\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nPUNCH_REQ2:c-1:target:sess:extra\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol PUNCH_REQ2 with extra fields: expected ERROR:malformed, nc failed"
         return 1
     fi
@@ -1348,7 +1348,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol reject PUNCH_REQ2 with extra fields"
     out="$TMP_ROOT/proto-punch-ipv6-cand.out"
-    if ! printf 'HELLO KCP2P/1\nPUNCH_REQ2:c-1:nosuch:sess\nCAND:HOST:[::1]:1234\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nPUNCH_REQ2:c-1:nosuch:sess\nCAND:HOST:[::1]:1234\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol PUNCH_REQ2 to missing peer: expected no ERROR for valid IPv6 candidate, nc failed"
         return 1
     fi
@@ -1358,7 +1358,7 @@ kc_test_protocol_vectors() {
     fi
     kc_test_pass "protocol accept IPv6 candidate in PUNCH_REQ2"
     out="$TMP_ROOT/proto-ack-bad.out"
-    if ! printf 'HELLO KCP2P/1\nPUNCH_ACK2:validtarget:bad@ack:sess\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+    if ! printf 'HELLO RP2P/1\nPUNCH_ACK2:validtarget:bad@ack:sess\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
         kc_test_fail "protocol PUNCH_ACK2 with @ in ack id: expected ERROR:malformed, nc failed"
         return 1
     fi

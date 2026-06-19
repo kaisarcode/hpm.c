@@ -3,11 +3,11 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 cmake_minimum_required(VERSION 3.14)
-project(p2p LANGUAGES C)
+project(rp2p LANGUAGES C)
 set(CMAKE_C_STANDARD 11)
 
-if(NOT DEFINED P2P_BUILD_VERSION)
-    set(P2P_BUILD_VERSION 0)
+if(NOT DEFINED RP2P_BUILD_VERSION)
+    set(RP2P_BUILD_VERSION 0)
 endif()
 
 if(NOT MSVC)
@@ -18,38 +18,38 @@ else()
 endif()
 
 # Shared library (for external use)
-set(P2P_SOURCES
-    src/libkcp2p.c
+set(RP2P_SOURCES
+    src/librp2p.c
     lib/monocypher/monocypher.c
 )
 
-set_source_files_properties(src/libkcp2p.c PROPERTIES
-    COMPILE_DEFINITIONS KC_P2P_BUILD_VERSION=${P2P_BUILD_VERSION}
+set_source_files_properties(src/librp2p.c PROPERTIES
+    COMPILE_DEFINITIONS RRP2P_BUILD_VERSION=${RP2P_BUILD_VERSION}
 )
 
-add_library(kcp2p_shared SHARED ${P2P_SOURCES})
-set_target_properties(kcp2p_shared PROPERTIES OUTPUT_NAME "kcp2p")
-target_include_directories(kcp2p_shared PRIVATE src lib/monocypher)
+add_library(rp2p_shared SHARED ${RP2P_SOURCES})
+set_target_properties(rp2p_shared PROPERTIES OUTPUT_NAME "rp2p")
+target_include_directories(rp2p_shared PRIVATE src lib/monocypher)
 
 # Static library (for external use)
-add_library(kcp2p_static STATIC ${P2P_SOURCES})
-set_target_properties(kcp2p_static PROPERTIES OUTPUT_NAME "kcp2p")
-target_include_directories(kcp2p_static PRIVATE src lib/monocypher)
+add_library(rp2p_static STATIC ${RP2P_SOURCES})
+set_target_properties(rp2p_static PROPERTIES OUTPUT_NAME "rp2p")
+target_include_directories(rp2p_static PRIVATE src lib/monocypher)
 
 # Binary: p2p
-add_executable(p2p src/p2p.c ${P2P_SOURCES})
-target_include_directories(p2p PRIVATE src lib/monocypher)
+add_executable(rp2p src/rp2p.c ${RP2P_SOURCES})
+target_include_directories(rp2p PRIVATE src lib/monocypher)
 
 if(UNIX AND NOT ANDROID)
-    target_link_libraries(kcp2p_shared pthread m)
-    target_link_libraries(kcp2p_static pthread m)
-    target_link_libraries(p2p pthread m)
+    target_link_libraries(rp2p_shared pthread m)
+    target_link_libraries(rp2p_static pthread m)
+    target_link_libraries(rp2p pthread m)
 elseif(MINGW)
-    target_link_libraries(kcp2p_shared ws2_32 bcrypt)
-    target_link_libraries(kcp2p_static ws2_32 bcrypt)
-    target_link_libraries(p2p ws2_32 bcrypt)
+    target_link_libraries(rp2p_shared ws2_32 bcrypt)
+    target_link_libraries(rp2p_static ws2_32 bcrypt)
+    target_link_libraries(rp2p ws2_32 bcrypt)
 elseif(MSVC)
-    target_link_libraries(kcp2p_shared ws2_32 bcrypt)
-    target_link_libraries(kcp2p_static ws2_32 bcrypt)
-    target_link_libraries(p2p ws2_32 bcrypt)
+    target_link_libraries(rp2p_shared ws2_32 bcrypt)
+    target_link_libraries(rp2p_static ws2_32 bcrypt)
+    target_link_libraries(rp2p ws2_32 bcrypt)
 endif()
