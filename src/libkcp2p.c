@@ -4301,6 +4301,9 @@ static int kc_p2p_stun_hdr(const unsigned char *buf, int len, unsigned char id[1
     uint32_t mg = ((uint32_t)buf[4] << 24) | ((uint32_t)buf[5] << 16) |
         ((uint32_t)buf[6] << 8) | buf[7];
     if (mg != KC_P2P_STUN_MAGIC) return -1;
+    int msg_len = (buf[2] << 8) | buf[3];
+    if (msg_len & 3) return -1;
+    if (20 + msg_len > len) return -1;
     int mt = (buf[0] << 8) | buf[1];
     memcpy(id, buf + 8, 12);
     return mt;
@@ -4315,9 +4318,10 @@ static int kc_p2p_stun_find(const unsigned char *buf, int len, int t, int *al) {
     while (o + 4 <= len) {
         int at = (buf[o] << 8) | buf[o + 1];
         int av = (buf[o + 2] << 8) | buf[o + 3];
+        int pad = (av & 3) ? 4 - (av & 3) : 0;
+        if (o + 4 + av > len) return -1;
         if (at == t) { if (al) *al = av; return o + 4; }
-        o += 4 + av;
-        if (av & 3) o += 4 - (av & 3);
+        o += 4 + av + pad;
     }
     return -1;
 }
@@ -4330,7 +4334,7 @@ static int kc_p2p_stun_rd_xaddr(const unsigned char *buf, int o, int al,
     unsigned char id[12], char *addr, int acap, unsigned short *port)
 {
     (void)id;
-    (void)al;
+    if (al < 8) return -1;
     if (buf[o + 1] != 1) return -1;
     unsigned short xp = ((unsigned short)buf[o + 2] << 8) | buf[o + 3];
     uint32_t xa = ((uint32_t)buf[o + 4] << 24) | ((uint32_t)buf[o + 5] << 16) |
@@ -4370,19 +4374,25 @@ static int kc_p2p_stun_binding(kc_p2p_t *ctx, int udp_fd,
         return -1;
 
     const char *p = ctx->stun_url;
-    if (strncmp(p, "stun:", 5) == 0) p += 5;
-    const char *co = strchr(p, ':');
-    if (!co) {
-        port = 3478;
-        sl = strlen(p);
-        if (sl >= sizeof(host)) sl = sizeof(host) - 1;
-        memcpy(host, p, sl); host[sl] = '\0';
-    } else {
-        sl = (size_t)(co - p);
-        if (sl >= sizeof(host)) return -1;
-        memcpy(host, p, sl); host[sl] = '\0';
-        port = (unsigned short)atoi(co + 1);
-    }
+    const char *co;
+    char *endptr;
+    long lport;
+
+    if (strncmp(p, "stun:", 5) != 0) return -1;
+    p += 5;
+
+    co = strchr(p, ':');
+    if (!co || co == p) return -1;
+
+    sl = (size_t)(co - p);
+    if (sl >= sizeof(host)) return -1;
+    memcpy(host, p, sl);
+    host[sl] = '\0';
+
+    if (*(co + 1) == '\0') return -1;
+    lport = strtol(co + 1, &endptr, 10);
+    if (*endptr != '\0' || lport <= 0 || lport > 65535) return -1;
+    port = (unsigned short)lport;
 
     if (kc_p2p_resolve(host, port, SOCK_DGRAM, &srv, &srv_len) != 0) return -1;
     if (srv.ss_family != AF_INET) return -1;
