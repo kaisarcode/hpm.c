@@ -109,6 +109,13 @@ int rp2p_open(rp2p_t **out);
 int rp2p_close(rp2p_t *ctx);
 
 /**
+ * Request clean termination for the current blocking operation on one context.
+ * @param ctx Context to stop.
+ * @return RP2P_OK on success or RP2P_ERROR on failure.
+ */
+int rp2p_stop(rp2p_t *ctx);
+
+/**
  * Returns the build version generated at compile time.
  * @return Unix timestamp for the current build.
  */

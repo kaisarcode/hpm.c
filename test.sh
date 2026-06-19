@@ -279,6 +279,118 @@ kc_test_kill() {
     return 0
 }
 
+# Verifies context-owned stop with two index contexts in one process.
+# @return 0 on success, 1 on failure.
+kc_test_multictx_stop() {
+    probe_src="$TMP_ROOT/multictx-stop.c"
+    probe_bin="$TMP_ROOT/multictx-stop"
+    probe_out="$TMP_ROOT/multictx-stop.out"
+    port_a=$1
+    port_b=$2
+
+    printf '%s\n' \
+        '#define _POSIX_C_SOURCE 200809L' \
+        '#include "rp2p.h"' \
+        '#include <pthread.h>' \
+        '#include <stdio.h>' \
+        '#include <stdlib.h>' \
+        '#include <string.h>' \
+        '#include <sys/socket.h>' \
+        '#include <arpa/inet.h>' \
+        '#include <unistd.h>' \
+        '' \
+        'typedef struct {' \
+        '    rp2p_t *ctx;' \
+        '    unsigned short port;' \
+        '    int result;' \
+        '    pthread_t thread;' \
+        '} kc_probe_index_t;' \
+        '' \
+        'static void kc_probe_sleep(unsigned int seconds) {' \
+        '    while (seconds > 0U) {' \
+        '        seconds = (unsigned int)sleep(seconds);' \
+        '    }' \
+        '}' \
+        '' \
+        'static int kc_probe_port_open(unsigned short port) {' \
+        '    int fd;' \
+        '    int rc;' \
+        '    struct sockaddr_in addr;' \
+        '' \
+        '    fd = socket(AF_INET, SOCK_STREAM, 0);' \
+        '    if (fd < 0) return 0;' \
+        '    memset(&addr, 0, sizeof(addr));' \
+        '    addr.sin_family = AF_INET;' \
+        '    addr.sin_port = htons(port);' \
+        '    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);' \
+        '    rc = connect(fd, (const struct sockaddr *)&addr, sizeof(addr));' \
+        '    close(fd);' \
+        '    return rc == 0;' \
+        '}' \
+        '' \
+        'static void *kc_probe_index_main(void *arg) {' \
+        '    kc_probe_index_t *index;' \
+        '' \
+        '    index = (kc_probe_index_t *)arg;' \
+        '    index->result = rp2p_serve_index(index->ctx, NULL, index->port);' \
+        '    return NULL;' \
+        '}' \
+        '' \
+        'int main(int argc, char **argv) {' \
+        '    kc_probe_index_t first;' \
+        '    kc_probe_index_t second;' \
+        '    int stopped_first;' \
+        '    int still_running_second;' \
+        '' \
+        '    if (argc != 3) return 1;' \
+        '    memset(&first, 0, sizeof(first));' \
+        '    memset(&second, 0, sizeof(second));' \
+        '    first.port = (unsigned short)atoi(argv[1]);' \
+        '    second.port = (unsigned short)atoi(argv[2]);' \
+        '    if (rp2p_open(&first.ctx) != RP2P_OK) return 1;' \
+        '    if (rp2p_open(&second.ctx) != RP2P_OK) return 1;' \
+        '    if (pthread_create(&first.thread, NULL, kc_probe_index_main, &first) != 0) return 1;' \
+        '    if (pthread_create(&second.thread, NULL, kc_probe_index_main, &second) != 0) return 1;' \
+        '    kc_probe_sleep(2U);' \
+        '    if (!kc_probe_port_open(first.port) || !kc_probe_port_open(second.port)) return 1;' \
+        '    if (rp2p_stop(first.ctx) != RP2P_OK) return 1;' \
+        '    if (pthread_join(first.thread, NULL) != 0) return 1;' \
+        '    kc_probe_sleep(2U);' \
+        '    stopped_first = !kc_probe_port_open(first.port);' \
+        '    still_running_second = kc_probe_port_open(second.port);' \
+        '    printf("first_stopped=%s second_running=%s first_result=%d second_result_pending=%d\\n",' \
+        '        stopped_first ? "yes" : "no",' \
+        '        still_running_second ? "yes" : "no",' \
+        '        first.result,' \
+        '        second.result);' \
+        '    if (rp2p_stop(second.ctx) != RP2P_OK) return 1;' \
+        '    if (pthread_join(second.thread, NULL) != 0) return 1;' \
+        '    rp2p_close(second.ctx);' \
+        '    rp2p_close(first.ctx);' \
+        '    if (!stopped_first || !still_running_second) return 1;' \
+        '    if (first.result != RP2P_OK || second.result != RP2P_OK) return 1;' \
+        '    return 0;' \
+        '}' > "$probe_src"
+
+    if ! cc -O3 -Wall -Wextra -Werror -Isrc "$probe_src" \
+        bin/x86_64/linux/librp2p.a -pthread -lm -o "$probe_bin"; then
+        kc_test_fail "context-owned stop: compile probe"
+        return 1
+    fi
+    if ! "$probe_bin" "$port_a" "$port_b" > "$probe_out" 2>&1; then
+        cat "$probe_out" >&2
+        kc_test_fail "context-owned stop: run probe"
+        return 1
+    fi
+    if ! grep -q 'first_stopped=yes second_running=yes' "$probe_out"; then
+        cat "$probe_out" >&2
+        kc_test_fail "context-owned stop: expected first stopped and second running"
+        return 1
+    fi
+    kc_test_pass "context-owned stop with two index contexts"
+    return 0
+}
+
 # Verifies the index listens only on TCP.
 # @return 0 on success, 1 on failure.
 kc_test_index_tcp_only() {
@@ -1557,11 +1669,14 @@ kc_test_main() {
     backend_disappear2=$((PORT_BASE + 43))
     listen_disappear=$((PORT_BASE + 125))
     listen_disappear2=$((PORT_BASE + 126))
+    multictx_port_1=$((PORT_BASE + 127))
+    multictx_port_2=$((PORT_BASE + 128))
 
     if ! kc_test_ensure_binary; then
         printf 'prerequisites missing, cannot run suite\n' >&2
         return 1
     fi
+    kc_test_multictx_stop "$multictx_port_1" "$multictx_port_2" || return 1
     kc_test_index_start "$index_port" 0 "" public-default || return 1
     kc_test_index_tcp_only "$index_port" || return 1
     kc_test_control_catalog "$index_port" "$control_backend" || return 1

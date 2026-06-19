@@ -28,17 +28,14 @@
 #include <sys/stat.h>
 #endif
 
-extern volatile sig_atomic_t rp2p_stop_requested;
-
 /**
  * Signal callback for graceful shutdown.
- * Summary: Sets the global stop flag so loops exit.
- * @param ctx Open context (unused).
+ * Summary: Requests graceful stop on the current context.
+ * @param ctx Open context.
  * @return None.
  */
 static void rp2p_signal_cb(rp2p_t *ctx) {
-    (void)ctx;
-    rp2p_stop_requested = 1;
+    rp2p_stop(ctx);
 }
 
 /**

@@ -237,9 +237,9 @@ typedef struct {
     unsigned char frame[RP2P_STREAM_MAX_FRAME];
 } rp2p_stream_pending_frame_t;
 
-volatile sig_atomic_t rp2p_stop_requested = 0;
-
 static rp2p_t *g_signal_ctx = NULL;
+
+static int rp2p_is_stop_requested(rp2p_t *ctx);
 
 typedef struct {
     uint32_t state[8];
@@ -496,7 +496,7 @@ static int rp2p_count_leading_zero_bits(const unsigned char hash[32]);
  * @param proof_cap    Output proof capacity.
  * @return 1 on success, 0 on failure.
  */
-static int rp2p_solve_register_pow(const char *pass, const char *nonce_hex,
+static int rp2p_solve_register_pow(rp2p_t *ctx, const char *pass, const char *nonce_hex,
     const char *id, int bits, char *solution_hex, size_t sol_cap,
     char *proof_hex, size_t proof_cap)
 {
@@ -515,7 +515,7 @@ static int rp2p_solve_register_pow(const char *pass, const char *nonce_hex,
         }
         counter++;
         if (counter == 0) break;
-        if ((counter & 0xfffff) == 0 && rp2p_stop_requested) break;
+        if ((counter & 0xfffff) == 0 && rp2p_is_stop_requested(ctx)) break;
     }
     return 0;
 }
@@ -624,7 +624,17 @@ struct rp2p {
     char stun_url[512];
     rp2p_pending_punch_t pending_punches[RP2P_MAX_PENDING_PUNCHES];
     int n_pending_punches;
+    volatile sig_atomic_t stop_requested;
 };
+
+/**
+ * Returns whether one context requested stop.
+ * @param ctx Context to inspect.
+ * @return 1 when stop was requested, 0 otherwise.
+ */
+static int rp2p_is_stop_requested(rp2p_t *ctx) {
+    return ctx && ctx->stop_requested;
+}
 
 typedef struct rp2p_udp_consumer_session {
     rp2p_fd_t fd;
@@ -2879,6 +2889,7 @@ int rp2p_open(rp2p_t **out) {
     ctx->vips = NULL;
     ctx->n_vips = 0;
     ctx->vips_cap = 0;
+    ctx->stop_requested = 0;
 #ifdef _WIN32
     InitializeCriticalSection(&ctx->mutex);
 #else
@@ -2913,6 +2924,17 @@ int rp2p_close(rp2p_t *ctx) {
     pthread_mutex_destroy(&ctx->mutex);
 #endif
     free(ctx);
+    return RP2P_OK;
+}
+
+/**
+ * Requests clean termination for the current blocking operation on one context.
+ * @param ctx Context to stop.
+ * @return 0 on success, -1 on error.
+ */
+int rp2p_stop(rp2p_t *ctx) {
+    if (!ctx) return RP2P_ERROR;
+    ctx->stop_requested = 1;
     return RP2P_OK;
 }
 
@@ -4781,6 +4803,8 @@ int rp2p_serve_index(
     int ret, i, n;
     int maxfd;
 
+    if (!ctx) return RP2P_ERROR;
+    ctx->stop_requested = 0;
     if (rp2p_platform_init() != 0)
         return RP2P_ENET;
 
@@ -4822,7 +4846,7 @@ int rp2p_serve_index(
         host ? host : "*", (unsigned)port);
 
     while (1) {
-        if (rp2p_stop_requested) { fprintf(stderr, "rp2p: shutdown requested\n"); break; }
+        if (ctx->stop_requested) { fprintf(stderr, "rp2p: shutdown requested\n"); break; }
 
         FD_ZERO(&fds);
         FD_SET(tcp_fd, &fds);
@@ -4837,7 +4861,7 @@ int rp2p_serve_index(
 
         tv.tv_sec = 1; tv.tv_usec = 0;
         n = select(maxfd + 1, &fds, NULL, NULL, &tv);
-        if (n < 0) { if (rp2p_stop_requested) break; continue; }
+        if (n < 0) { if (ctx->stop_requested) break; continue; }
         if (n == 0) continue;
 
         if (FD_ISSET(tcp_fd, &fds)) {
@@ -5374,6 +5398,7 @@ int rp2p_wait(
 
     (void)bind_port;
     if (!ctx) return RP2P_ERROR;
+    ctx->stop_requested = 0;
     if (ctx->proto != RP2P_PROTO_TCP && ctx->proto != RP2P_PROTO_UDP)
         return RP2P_ERROR;
     if (ctx->bind_port == 0) return RP2P_ERROR;
@@ -5406,7 +5431,7 @@ int rp2p_wait(
             return RP2P_ERROR;
         }
         fprintf(stderr, "rp2p: connecting...\n");
-        if (!rp2p_solve_register_pow(ctx->pass, nonce, self_id,
+        if (!rp2p_solve_register_pow(ctx, ctx->pass, nonce, self_id,
             (int)chall_bits, solution, sizeof(solution), proof, sizeof(proof)))
         {
             RP2P_FD_CLOSE(control_fd);
@@ -5459,7 +5484,7 @@ int rp2p_wait(
         rp2p_set_nonblock(control_fd);
         rp2p_set_nonblock(udp_fd);
 
-        while (!rp2p_stop_requested) {
+        while (!ctx->stop_requested) {
             fd_set fds;
             struct timeval tv;
             int maxfd;
@@ -5484,7 +5509,7 @@ int rp2p_wait(
             tv.tv_sec = 1; tv.tv_usec = 0;
             n = select(maxfd + 1, &fds, NULL, NULL, &tv);
             if (n < 0) continue;
-            if (rp2p_stop_requested) break;
+            if (ctx->stop_requested) break;
 
             if (rp2p_now_s() - last_heartbeat >= RP2P_HEARTBEAT_S) {
                 snprintf(send_buf, sizeof(send_buf), "REGISTER:%s", self_id);
@@ -5943,6 +5968,7 @@ int rp2p_connect(
 
     (void)bind_port;
     if (!ctx) return RP2P_ERROR;
+    ctx->stop_requested = 0;
     if (ctx->bind_port == 0) return RP2P_ERROR;
     if (rp2p_platform_init() != 0) return RP2P_ENET;
     udp_any_host = rp2p_host_is_ipv6_literal(index_host) ? "::" : "0.0.0.0";
@@ -5995,7 +6021,7 @@ int rp2p_connect(
     rp2p_set_nonblock(local_fd);
     if (!RP2P_ISERR(tcp_listen_fd)) rp2p_set_nonblock(tcp_listen_fd);
 
-    while (!rp2p_stop_requested) {
+    while (!ctx->stop_requested) {
         fd_set fds;
         struct timeval tv;
         int maxfd;
@@ -6025,7 +6051,7 @@ int rp2p_connect(
         tv.tv_sec = 1; tv.tv_usec = 0;
         n = select(maxfd + 1, &fds, NULL, NULL, &tv);
         if (n < 0) continue;
-        if (rp2p_stop_requested) break;
+        if (ctx->stop_requested) break;
 
         if (!RP2P_ISERR(tcp_listen_fd) && FD_ISSET(tcp_listen_fd, &fds)) {
             rp2p_fd_t client_fd = accept(tcp_listen_fd, NULL, NULL);
