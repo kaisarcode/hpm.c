@@ -97,10 +97,11 @@ typedef int kc_p2p_fd_t;
 #define KC_P2P_STREAM_RTO_BACKOFF_SHIFT 4
 #define KC_P2P_STREAM_MAX_BURST          16
 #define KC_P2P_STREAM_HEADER_SZ         44
-#define KC_P2P_IPV4_UDP_OVERHEAD        28
-#define KC_P2P_IPV6_UDP_OVERHEAD        40
-#define KC_P2P_MAX_DATAGRAM_V4          1472
-#define KC_P2P_MAX_DATAGRAM_V6          1452
+#define KC_P2P_LINK_MTU                 1500
+#define KC_P2P_IPV4_UDP_OVERHEAD        (20 + 8)
+#define KC_P2P_IPV6_UDP_OVERHEAD        (40 + 8)
+#define KC_P2P_MAX_DATAGRAM_V4          (KC_P2P_LINK_MTU - KC_P2P_IPV4_UDP_OVERHEAD)
+#define KC_P2P_MAX_DATAGRAM_V6          (KC_P2P_LINK_MTU - KC_P2P_IPV6_UDP_OVERHEAD)
 #define KC_P2P_PUNCH_DIRECT_ROUNDS 3
 #define KC_P2P_PUNCH_DIRECT_WAIT_MS 500
 #define KC_P2P_PUNCH_SWEEP_WAIT_MS 20
@@ -152,15 +153,12 @@ typedef struct {
 #define KC_P2P_BUILD_VERSION 0
 #endif
 
-/**
- * Compile-time size assertion for MTU safety.
- * @return void.
- */
-static void kc_p2p_size_check(void) {
-    (void)sizeof(char[1 - 2 * (KC_P2P_STREAM_HEADER_SZ + KC_P2P_STREAM_TAG_SZ >
-        KC_P2P_STREAM_MAX_FRAME - KC_P2P_STREAM_MAX_PAYLOAD)]);
-    (void)sizeof(char[1 - 2 * (KC_P2P_STREAM_MAX_FRAME > KC_P2P_MAX_DATAGRAM_V4)]);
-}
+_Static_assert(KC_P2P_STREAM_HEADER_SZ + KC_P2P_STREAM_TAG_SZ + KC_P2P_STREAM_MAX_PAYLOAD <= KC_P2P_STREAM_MAX_FRAME,
+    "Stream frame cannot fit header, tag, and max payload");
+_Static_assert(KC_P2P_STREAM_MAX_FRAME <= KC_P2P_MAX_DATAGRAM_V4,
+    "Stream frame exceeds IPv4 datagram limit");
+_Static_assert(KC_P2P_STREAM_MAX_FRAME <= KC_P2P_MAX_DATAGRAM_V6,
+    "Stream frame exceeds IPv6 datagram limit");
 
 /**
  * Returns the build version generated at compile time.
@@ -2854,8 +2852,6 @@ static const char *kc_p2p_get_register_pass(kc_p2p_t *ctx, const char *id) {
 int kc_p2p_open(kc_p2p_t **out) {
     kc_p2p_t *ctx;
     kc_p2p_peer_t *p;
-
-    kc_p2p_size_check();
     if (!out) return KC_P2P_ERROR;
     ctx = (kc_p2p_t *)calloc(1, sizeof(kc_p2p_t));
     if (!ctx) return KC_P2P_ERROR;
