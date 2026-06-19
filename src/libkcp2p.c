@@ -901,9 +901,9 @@ static uint64_t kc_p2p_now_ms(void) {
 #ifdef _WIN32
     return (uint64_t)GetTickCount64();
 #else
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (uint64_t)tv.tv_sec * 1000u + (uint64_t)(tv.tv_usec / 1000);
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000u + (uint64_t)(ts.tv_nsec / 1000000);
 #endif
 }
 
