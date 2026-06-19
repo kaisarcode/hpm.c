@@ -97,6 +97,9 @@ typedef int kc_p2p_fd_t;
 #define KC_P2P_CTRL_LINE_MAX     1024
 #define KC_P2P_CTRL_FIELD_MAX     256
 #define KC_P2P_CTRL_SESSION_MAX    63
+#define KC_P2P_CTRL_HELLO          "HELLO KCP2P/1"
+#define KC_P2P_CTRL_HELLO_OK       "OK:HELLO"
+#define KC_P2P_CTRL_VERSION_ERROR  "ERROR:version mismatch"
 
 #define KC_P2P_STREAM_TYPE_HELLO     1u
 #define KC_P2P_STREAM_TYPE_HELLO_ACK 2u
@@ -551,6 +554,7 @@ typedef struct {
     int buf_len;
     char id[KC_P2P_ID_MAX + 1];
     int registered;
+    int hello_ok;
 } kc_p2p_tcp_conn_t;
 
 typedef struct {
@@ -2413,6 +2417,30 @@ static int kc_p2p_tcp_readline(kc_p2p_fd_t fd, char *buf, int cap, int timeout_s
 }
 
 /**
+ * Opens a TCP control connection and validates the control protocol version.
+ * @param index_host Index host.
+ * @param index_port Index port.
+ * @return Connected fd on success, invalid fd on failure.
+ */
+static kc_p2p_fd_t kc_p2p_control_connect(const char *index_host,
+    unsigned short index_port)
+{
+    kc_p2p_fd_t fd;
+    char reply[KC_P2P_BUF];
+
+    fd = kc_p2p_tcp_connect(index_host, index_port);
+    if (KC_P2P_ISERR(fd)) return fd;
+    if (kc_p2p_tcp_send(fd, KC_P2P_CTRL_HELLO) != KC_P2P_OK ||
+        kc_p2p_tcp_readline(fd, reply, (int)sizeof(reply), 5) < 0 ||
+        strcmp(reply, KC_P2P_CTRL_HELLO_OK) != 0)
+    {
+        KC_P2P_FD_CLOSE(fd);
+        return KC_P2P_FD_INVALID;
+    }
+    return fd;
+}
+
+/**
  * Returns whether the byte is ASCII whitespace.
  * @param ch Input byte.
  * @return 1 when whitespace, 0 otherwise.
@@ -3218,6 +3246,7 @@ static int kc_p2p_conn_add(kc_p2p_t *ctx, int fd) {
     ctx->conns[ctx->n_conns].buf_len = 0;
     ctx->conns[ctx->n_conns].id[0] = '\0';
     ctx->conns[ctx->n_conns].registered = 0;
+    ctx->conns[ctx->n_conns].hello_ok = 0;
     ctx->n_conns++;
     return KC_P2P_OK;
 }
@@ -4444,6 +4473,28 @@ int kc_p2p_serve_index(
                         cmd_buf[line_len] = '\0';
                         line_start += line_len + 1;
 
+                        if (strcmp(cmd_buf, KC_P2P_CTRL_HELLO) == 0) {
+                            if (c->hello_ok) {
+                                kc_p2p_tcp_send(c->fd,
+                                    KC_P2P_CTRL_VERSION_ERROR);
+                                kc_p2p_conn_remove(ctx, i);
+                                fatal_frame = 1;
+                                break;
+                            }
+                            c->hello_ok = 1;
+                            kc_p2p_tcp_send(c->fd, KC_P2P_CTRL_HELLO_OK);
+                            continue;
+                        }
+                        if (strncmp(cmd_buf, "HELLO", 5) == 0 ||
+                            !c->hello_ok)
+                        {
+                            kc_p2p_tcp_send(c->fd,
+                                KC_P2P_CTRL_VERSION_ERROR);
+                            kc_p2p_conn_remove(ctx, i);
+                            fatal_frame = 1;
+                            break;
+                        }
+
                         {
                             const char *colon = strchr(cmd_buf, ':');
                             size_t cmd_len = colon ? (size_t)(colon - cmd_buf) : strlen(cmd_buf);
@@ -4824,7 +4875,7 @@ int kc_p2p_deregister(
 
     snprintf(cmd, sizeof(cmd), "DEREGISTER:%s:KEY:%s", id, key);
     {
-    kc_p2p_fd_t fd = kc_p2p_tcp_connect(index_host, index_port);
+    kc_p2p_fd_t fd = kc_p2p_control_connect(index_host, index_port);
         if (KC_P2P_ISERR(fd)) return KC_P2P_ENET;
         if (kc_p2p_tcp_send(fd, cmd) != KC_P2P_OK) { KC_P2P_FD_CLOSE(fd); return KC_P2P_ENET; }
         if (kc_p2p_tcp_readline(fd, reply, (int)sizeof(reply), 5) < 0) { KC_P2P_FD_CLOSE(fd); return KC_P2P_ETIMEOUT; }
@@ -4863,7 +4914,7 @@ int kc_p2p_wait(
         return KC_P2P_ERROR;
     if (ctx->bind_port == 0) return KC_P2P_ERROR;
 
-    control_fd = kc_p2p_tcp_connect(index_host, index_port);
+    control_fd = kc_p2p_control_connect(index_host, index_port);
     if (KC_P2P_ISERR(control_fd)) return KC_P2P_ENET;
 
     udp_fd = kc_p2p_create_socket("0.0.0.0", 0);
@@ -5440,7 +5491,7 @@ int kc_p2p_connect(
         }
     }
 
-    ctrl_fd = kc_p2p_tcp_connect(index_host, index_port);
+    ctrl_fd = kc_p2p_control_connect(index_host, index_port);
     if (KC_P2P_ISERR(ctrl_fd)) {
         KC_P2P_FD_CLOSE(local_fd);
         if (!KC_P2P_ISERR(tcp_listen_fd)) KC_P2P_FD_CLOSE(tcp_listen_fd);
@@ -5508,7 +5559,7 @@ int kc_p2p_connect(
         if (!KC_P2P_ISERR(tcp_listen_fd) && FD_ISSET(tcp_listen_fd, &fds)) {
             kc_p2p_fd_t client_fd = accept(tcp_listen_fd, NULL, NULL);
             if (!KC_P2P_ISERR(client_fd)) {
-                ctrl_fd = kc_p2p_tcp_connect(index_host, index_port);
+                ctrl_fd = kc_p2p_control_connect(index_host, index_port);
                 if (!KC_P2P_ISERR(ctrl_fd)) {
                     unsigned char sess_id_bin[KC_P2P_STREAM_SESSION_ID_SZ];
                     
@@ -5602,7 +5653,7 @@ int kc_p2p_connect(
                     kc_p2p_udp_consumer_session_t sess;
                     memset(&sess, 0, sizeof(sess));
 
-                    ctrl_fd = kc_p2p_tcp_connect(index_host, index_port);
+                    ctrl_fd = kc_p2p_control_connect(index_host, index_port);
                     if (!KC_P2P_ISERR(ctrl_fd)) {
                         kc_p2p_candidate_t cands[KC_P2P_CANDIDATES_MAX];
                         int cand_count = 0;

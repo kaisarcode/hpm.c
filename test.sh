@@ -248,6 +248,11 @@ kc_test_control_catalog() {
     bad_lookup_out="$TMP_ROOT/bad-lookup.out"
     multi_out="$TMP_ROOT/multi.out"
     bad_punch_out="$TMP_ROOT/bad-punch.out"
+    no_hello_out="$TMP_ROOT/no-hello.out"
+    old_hello_out="$TMP_ROOT/old-hello.out"
+    new_hello_out="$TMP_ROOT/new-hello.out"
+    bad_hello_out="$TMP_ROOT/bad-hello.out"
+    repeat_hello_out="$TMP_ROOT/repeat-hello.out"
 
     kc_test_tcp_start "$backend_port" || return 1
     "$BIN" set control@127.0.0.1:"$port" --tcp "$backend_port" > "$TMP_ROOT/control-set.log" 2>&1 &
@@ -260,7 +265,67 @@ kc_test_control_catalog() {
         kc_test_fail "control-register"
         return 1
     fi
-    if ! printf 'LIST\n' | nc -w 2 127.0.0.1 "$port" > "$list_out" 2>/dev/null; then
+    if ! printf 'LOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$no_hello_out" 2>/dev/null; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-no-hello"
+        return 1
+    fi
+    if ! grep -q '^ERROR:version mismatch$' "$no_hello_out"; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-no-hello"
+        return 1
+    fi
+    if ! printf 'HELLO KCP2P/0\n' | nc -w 2 127.0.0.1 "$port" > "$old_hello_out" 2>/dev/null; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-old-hello"
+        return 1
+    fi
+    if ! grep -q '^ERROR:version mismatch$' "$old_hello_out"; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-old-hello"
+        return 1
+    fi
+    if ! printf 'HELLO KCP2P/2\n' | nc -w 2 127.0.0.1 "$port" > "$new_hello_out" 2>/dev/null; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-new-hello"
+        return 1
+    fi
+    if ! grep -q '^ERROR:version mismatch$' "$new_hello_out"; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-new-hello"
+        return 1
+    fi
+    if ! printf 'HELLO KCP2P/x\n' | nc -w 2 127.0.0.1 "$port" > "$bad_hello_out" 2>/dev/null; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-bad-hello"
+        return 1
+    fi
+    if ! grep -q '^ERROR:version mismatch$' "$bad_hello_out"; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-bad-hello"
+        return 1
+    fi
+    if ! printf 'HELLO KCP2P/1\nHELLO KCP2P/1\n' | nc -w 2 127.0.0.1 "$port" > "$repeat_hello_out" 2>/dev/null; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-repeat-hello"
+        return 1
+    fi
+    if ! grep -q '^OK:HELLO$' "$repeat_hello_out" || ! grep -q '^ERROR:version mismatch$' "$repeat_hello_out"; then
+        kill -9 "$spid" "$HPID" 2>/dev/null
+        wait "$spid" "$HPID" 2>/dev/null
+        kc_test_fail "control-repeat-hello"
+        return 1
+    fi
+    if ! printf 'HELLO KCP2P/1\nLIST\n' | nc -w 2 127.0.0.1 "$port" > "$list_out" 2>/dev/null; then
         kill -9 "$spid" "$HPID" 2>/dev/null
         wait "$spid" "$HPID" 2>/dev/null
         kc_test_fail "control-list"
@@ -272,7 +337,7 @@ kc_test_control_catalog() {
         kc_test_fail "control-list"
         return 1
     fi
-    if ! printf 'LOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$lookup_out" 2>/dev/null; then
+    if ! printf 'HELLO KCP2P/1\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$lookup_out" 2>/dev/null; then
         kill -9 "$spid" "$HPID" 2>/dev/null
         wait "$spid" "$HPID" 2>/dev/null
         kc_test_fail "control-lookup"
@@ -284,7 +349,7 @@ kc_test_control_catalog() {
         kc_test_fail "control-lookup"
         return 1
     fi
-    if ! printf 'LOOKUP:control:extra\n' | nc -w 2 127.0.0.1 "$port" > "$bad_lookup_out" 2>/dev/null; then
+    if ! printf 'HELLO KCP2P/1\nLOOKUP:control:extra\n' | nc -w 2 127.0.0.1 "$port" > "$bad_lookup_out" 2>/dev/null; then
         kill -9 "$spid" "$HPID" 2>/dev/null
         wait "$spid" "$HPID" 2>/dev/null
         kc_test_fail "control-bad-lookup"
@@ -296,7 +361,7 @@ kc_test_control_catalog() {
         kc_test_fail "control-bad-lookup"
         return 1
     fi
-    if ! printf 'LIST\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$multi_out" 2>/dev/null; then
+    if ! printf 'HELLO KCP2P/1\nLIST\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$multi_out" 2>/dev/null; then
         kill -9 "$spid" "$HPID" 2>/dev/null
         wait "$spid" "$HPID" 2>/dev/null
         kc_test_fail "control-multi-read"
@@ -308,7 +373,7 @@ kc_test_control_catalog() {
         kc_test_fail "control-multi-read"
         return 1
     fi
-    if ! printf 'PUNCH_REQ2:c-1:control:abc\nCAND:bad:127.0.0.1:1\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$bad_punch_out" 2>/dev/null; then
+    if ! printf 'HELLO KCP2P/1\nPUNCH_REQ2:c-1:control:abc\nCAND:bad:127.0.0.1:1\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$bad_punch_out" 2>/dev/null; then
         kill -9 "$spid" "$HPID" 2>/dev/null
         wait "$spid" "$HPID" 2>/dev/null
         kc_test_fail "control-bad-candidate"
@@ -326,7 +391,7 @@ kc_test_control_catalog() {
         kc_test_fail "control-deregister"
         return 1
     fi
-    if ! printf 'LOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$miss_out" 2>/dev/null; then
+    if ! printf 'HELLO KCP2P/1\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$miss_out" 2>/dev/null; then
         kill -9 "$spid" "$HPID" 2>/dev/null
         wait "$spid" "$HPID" 2>/dev/null
         kc_test_fail "control-post-del"
