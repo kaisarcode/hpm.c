@@ -134,6 +134,14 @@ typedef int rp2p_fd_t;
 #define RP2P_CTRTOK_PUNCH_PING   "RP2P_CTRTOK_PUNCH_PING:"
 #define RP2P_CTRTOK_PUNCH_PONG   "RP2P_CTRTOK_PUNCH_PONG:"
 #define RP2P_CTRTOK_KA           "RP2P_CTRTOK_KA:"
+
+#define RP2P_CTRCMD_REGISTER     "RP2P_CTRTOK_REGISTER"
+#define RP2P_CTRCMD_DEREGISTER   "RP2P_CTRTOK_DEREGISTER"
+#define RP2P_CTRCMD_LOOKUP       "RP2P_CTRTOK_LOOKUP"
+#define RP2P_CTRCMD_LIST         "RP2P_CTRTOK_LIST"
+#define RP2P_CTRCMD_PUNCH_REQ2   "RP2P_CTRTOK_PUNCH_REQ2"
+#define RP2P_CTRCMD_PUNCH_ACK2   "RP2P_CTRTOK_PUNCH_ACK2"
+
 #define RP2P_CTRTOK_ERROR_MALFORMED "RP2P_CTRTOK_ERROR:malformed"
 #define RP2P_CTRTOK_ERROR_INVALID_ID "RP2P_CTRTOK_ERROR:invalid id"
 #define RP2P_CTRTOK_ERROR_PEER_TABLE_FULL "RP2P_CTRTOK_ERROR:peer table full"
@@ -4841,7 +4849,7 @@ int rp2p_serve_index(
                             cmd[cmd_len] = '\0';
                         }
 
-                        if (strcmp(cmd, "RP2P_CTRTOK_REGISTER") == 0) {
+                        if (strcmp(cmd, RP2P_CTRCMD_REGISTER) == 0) {
                             struct sockaddr_storage peer_sa;
                             socklen_t peer_len = sizeof(peer_sa);
 
@@ -4937,7 +4945,7 @@ int rp2p_serve_index(
                                 }
                             }
 
-                        } else if (strcmp(cmd, "RP2P_CTRTOK_PUNCH_REQ2") == 0) {
+                        } else if (strcmp(cmd, RP2P_CTRCMD_PUNCH_REQ2) == 0) {
                             char self_id[RP2P_ID_MAX + 1] = {0};
                             char target_id[RP2P_ID_MAX + 1] = {0};
                             char sess_id[RP2P_CTRL_SESSION_MAX + 1] = {0};
@@ -5001,7 +5009,7 @@ int rp2p_serve_index(
                                 line_start = block_end;
                             }
 
-                        } else if (strcmp(cmd, "RP2P_CTRTOK_PUNCH_ACK2") == 0) {
+                        } else if (strcmp(cmd, RP2P_CTRCMD_PUNCH_ACK2) == 0) {
                             char ack_self_id[RP2P_ID_MAX + 1] = {0};
                             char ack_target_id[RP2P_ID_MAX + 1] = {0};
                             char ack_sess_id[RP2P_CTRL_SESSION_MAX + 1] = {0};
@@ -5039,7 +5047,7 @@ int rp2p_serve_index(
                                 line_start = block_end;
                             }
                             
-                        } else if (strcmp(cmd, "RP2P_CTRTOK_DEREGISTER") == 0) {
+                        } else if (strcmp(cmd, RP2P_CTRCMD_DEREGISTER) == 0) {
                             char dkey[RP2P_KEY_STR_SZ];
                             if (rp2p_parse_deregister(cmd_buf, id, dkey)) {
                                 srv_idx = rp2p_find_peer(ctx, id);
@@ -5055,7 +5063,7 @@ int rp2p_serve_index(
                                     RP2P_CTRTOK_ERROR_MALFORMED);
                             }
 
-                        } else if (strcmp(cmd, "RP2P_CTRTOK_LIST") == 0) {
+                        } else if (strcmp(cmd, RP2P_CTRCMD_LIST) == 0) {
                             if (strcmp(cmd_buf, RP2P_CTRTOK_LIST) != 0) {
                                 rp2p_tcp_send(c->fd,
                                     RP2P_CTRTOK_ERROR_MALFORMED);
@@ -5070,7 +5078,7 @@ int rp2p_serve_index(
                             }
                             rp2p_tcp_send(c->fd, RP2P_CTRTOK_END);
 
-                        } else if (strcmp(cmd, "RP2P_CTRTOK_LOOKUP") == 0) {
+                        } else if (strcmp(cmd, RP2P_CTRCMD_LOOKUP) == 0) {
                             if (rp2p_parse_lookup(cmd_buf, id)) {
                                 srv_idx = rp2p_find_peer(ctx, id);
                                 if (srv_idx >= 0) {
