@@ -154,7 +154,7 @@ printf 'ping' | socat - TCP:127.0.0.1:9000
 
 The part before `@` (e.g. `web`, `game`) is an arbitrary label you choose to identify your service in the index.
 It is **not** a system username, and the index does **not** create user accounts or store credentials, it is simply a key in a plain lookup table.
-If nobody has announced `game`, then `rp2p con game@idx.example.com:9876` fails with `NOT_FOUND`.
+If nobody has announced `game`, then `rp2p con game@idx.example.com:9876` fails with `RP2P_CTRTOK_NOT_FOUND`.
 The form `game@idx.example.com` is **not** a URL; you cannot open it in a browser, ping it, or connect to it directly.
 It only has meaning inside rp2p commands to refer to a registered host on a specific index.
 
@@ -242,16 +242,16 @@ UDP is used only between peers for hole-punch probes, keepalives, and direct pay
 
 | Request | Response |
 | :--- | :--- |
-| `REGISTER:id` | `CHALLENGE:nonce:bits` |
-| `REGISTER:id:SOLUTION:<hex>:PROOF:<hex>` | `OK:KEY:<hex>` or `AUTH_FAILED` |
-| `DEREGISTER:id:KEY:<hex>` | `OK` |
-| `LIST` | `PEER:id\n...END` |
-| `LOOKUP:id` | `PEER:id` or `NOT_FOUND` |
-| `PUNCH_REQ2:me:target:session\nCAND:...\nEND` | `PUNCH_OK2:target:session\nCAND:...\nEND` to initiator |
-| forwarded by index | `PUNCH_CALL2:me:session\nCAND:...\nEND` to target |
-| `PUNCH_PING:...` | Direct peer STUN-like probe (UDP) |
-| `PUNCH_PONG:...` | Direct peer STUN-like reply (UDP) |
-| `RP2P_KA:` | UDP keepalive over direct path |
+| `RP2P_CTRTOK_REGISTER:id` | `RP2P_CTRTOK_CHALLENGE:nonce:bits` |
+| `RP2P_CTRTOK_REGISTER:id:SOLUTION:<hex>:PROOF:<hex>` | `RP2P_CTRTOK_OK:KEY:<hex>` or `RP2P_CTRTOK_AUTH_FAILED` |
+| `RP2P_CTRTOK_DEREGISTER:id:KEY:<hex>` | `RP2P_CTRTOK_OK` |
+| `RP2P_CTRTOK_LIST` | `RP2P_CTRTOK_PEER:id\n...RP2P_CTRTOK_END` |
+| `RP2P_CTRTOK_LOOKUP:id` | `RP2P_CTRTOK_PEER:id` or `RP2P_CTRTOK_NOT_FOUND` |
+| `RP2P_CTRTOK_PUNCH_REQ2:me:target:session\nRP2P_CTRTOK_CAND:...\nRP2P_CTRTOK_END` | `RP2P_CTRTOK_PUNCH_OK2:target:session\nRP2P_CTRTOK_CAND:...\nRP2P_CTRTOK_END` to initiator |
+| forwarded by index | `RP2P_CTRTOK_PUNCH_CALL2:me:session\nRP2P_CTRTOK_CAND:...\nRP2P_CTRTOK_END` to target |
+| `RP2P_CTRTOK_PUNCH_PING:...` | Direct peer STUN-like probe (UDP) |
+| `RP2P_CTRTOK_PUNCH_PONG:...` | Direct peer STUN-like reply (UDP) |
+| `RP2P_CTRTOK_KA:` | UDP keepalive over direct path |
 
 ### TCP Stream Layer
 
@@ -294,10 +294,10 @@ The proof is always HMAC-SHA256 keyed by `RP2P_PASS`. On a public index, `RP2P_P
 ### Wire
 
 ```
-I <- C: REGISTER:<self_id>
-I -> C: CHALLENGE:<nonce_hex>:<bits>
-I <- C: REGISTER:<self_id>:SOLUTION:<solution_hex>:PROOF:<proof_hex>
-I -> C: OK:KEY:<hex>
+I <- C: RP2P_CTRTOK_REGISTER:<self_id>
+I -> C: RP2P_CTRTOK_CHALLENGE:<nonce_hex>:<bits>
+I <- C: RP2P_CTRTOK_REGISTER:<self_id>:SOLUTION:<solution_hex>:PROOF:<proof_hex>
+I -> C: RP2P_CTRTOK_OK:KEY:<hex>
 ```
 
 ### CLI

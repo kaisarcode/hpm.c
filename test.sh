@@ -14,6 +14,28 @@ PORT_BASE=$((20000 + $$ % 20000))
 IPID=
 HPID=
 UPID=
+CTRL_HELLO='RP2P_CTRTOK_HELLO RP2P/1'
+CTRL_HELLO_V0='RP2P_CTRTOK_HELLO RP2P/0'
+CTRL_HELLO_V2='RP2P_CTRTOK_HELLO RP2P/2'
+CTRL_HELLO_BAD='RP2P_CTRTOK_HELLO RP2P/x'
+CTRL_HELLO_OK='RP2P_CTRTOK_HELLO_OK'
+CTRL_REGISTER='RP2P_CTRTOK_REGISTER:'
+CTRL_DEREGISTER='RP2P_CTRTOK_DEREGISTER:'
+CTRL_LOOKUP='RP2P_CTRTOK_LOOKUP:'
+CTRL_LIST='RP2P_CTRTOK_LIST'
+CTRL_PEER='RP2P_CTRTOK_PEER:'
+CTRL_END='RP2P_CTRTOK_END'
+CTRL_CHALLENGE='RP2P_CTRTOK_CHALLENGE:'
+CTRL_AUTH_FAILED='RP2P_CTRTOK_AUTH_FAILED'
+CTRL_NOT_FOUND='RP2P_CTRTOK_NOT_FOUND'
+CTRL_PUNCH_REQ2='RP2P_CTRTOK_PUNCH_REQ2:'
+CTRL_PUNCH_ACK2='RP2P_CTRTOK_PUNCH_ACK2:'
+CTRL_CAND='RP2P_CTRTOK_CAND:'
+CTRL_ERR_VERSION='RP2P_CTRTOK_ERROR:version mismatch'
+CTRL_ERR_MALFORMED='RP2P_CTRTOK_ERROR:malformed'
+CTRL_ERR_UNKNOWN='RP2P_CTRTOK_ERROR:unknown command'
+CTRL_ERR_INVALID_ID='RP2P_CTRTOK_ERROR:invalid id'
+CTRL_ERR_INVALID_KEY='RP2P_CTRTOK_ERROR:invalid key'
 
 # Prints a failure line and increments counter.
 # @return 1 on failure.
@@ -407,7 +429,8 @@ kc_test_index_tcp_only() {
     return 0
 }
 
-# Verifies HELLO, LIST, LOOKUP, DEREGISTER, and malformed rejection over TCP.
+# Verifies namespaced control handshake and lookup flow.
+# Also checks malformed control rejection over TCP.
 # @return 0 on success, 1 on failure.
 kc_test_control_catalog() {
     port=$1
@@ -445,144 +468,144 @@ kc_test_control_catalog() {
         _i=$((_i+1))
     done
 
-    if ! printf 'LOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$no_hello_out" 2>/dev/null; then
+    if ! printf '%scontrol\n' "$CTRL_LOOKUP" | nc -w 2 127.0.0.1 "$port" > "$no_hello_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control HELLO required: expected ERROR:version mismatch, nc failed"
+        kc_test_fail "control handshake required: expected $CTRL_ERR_VERSION, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:version mismatch$' "$no_hello_out"; then
+    if ! grep -q "^$CTRL_ERR_VERSION$" "$no_hello_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control HELLO required: expected ERROR:version mismatch line, got $(tr '\n' '|' < "$no_hello_out" | head -c 80)"
+        kc_test_fail "control handshake required: expected $CTRL_ERR_VERSION, got $(tr '\n' '|' < "$no_hello_out" | head -c 80)"
         return 1
     fi
-    kc_test_pass "control reject command without HELLO"
+    kc_test_pass "control reject command without handshake"
 
-    if ! printf 'HELLO RP2P/0\n' | nc -w 2 127.0.0.1 "$port" > "$old_hello_out" 2>/dev/null; then
+    if ! printf '%s\n' "$CTRL_HELLO_V0" | nc -w 2 127.0.0.1 "$port" > "$old_hello_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control old protocol HELLO: expected ERROR:version mismatch, nc failed"
+        kc_test_fail "control old protocol handshake: expected $CTRL_ERR_VERSION, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:version mismatch$' "$old_hello_out"; then
+    if ! grep -q "^$CTRL_ERR_VERSION$" "$old_hello_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control old protocol HELLO (v0): expected ERROR:version mismatch, got $(tr '\n' '|' < "$old_hello_out" | head -c 60)"
+        kc_test_fail "control old protocol handshake (v0): expected $CTRL_ERR_VERSION, got $(tr '\n' '|' < "$old_hello_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control reject HELLO RP2P/0"
+    kc_test_pass "control reject handshake v0"
 
-    if ! printf 'HELLO RP2P/2\n' | nc -w 2 127.0.0.1 "$port" > "$new_hello_out" 2>/dev/null; then
+    if ! printf '%s\n' "$CTRL_HELLO_V2" | nc -w 2 127.0.0.1 "$port" > "$new_hello_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control new protocol HELLO: expected ERROR:version mismatch, nc failed"
+        kc_test_fail "control future protocol handshake: expected $CTRL_ERR_VERSION, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:version mismatch$' "$new_hello_out"; then
+    if ! grep -q "^$CTRL_ERR_VERSION$" "$new_hello_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control new protocol HELLO (v2): expected ERROR:version mismatch, got $(tr '\n' '|' < "$new_hello_out" | head -c 60)"
+        kc_test_fail "control future protocol handshake (v2): expected $CTRL_ERR_VERSION, got $(tr '\n' '|' < "$new_hello_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control reject HELLO RP2P/2"
+    kc_test_pass "control reject handshake v2"
 
-    if ! printf 'HELLO RP2P/x\n' | nc -w 2 127.0.0.1 "$port" > "$bad_hello_out" 2>/dev/null; then
+    if ! printf '%s\n' "$CTRL_HELLO_BAD" | nc -w 2 127.0.0.1 "$port" > "$bad_hello_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control malformed HELLO version: expected ERROR:version mismatch, nc failed"
+        kc_test_fail "control malformed handshake version: expected $CTRL_ERR_VERSION, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:version mismatch$' "$bad_hello_out"; then
+    if ! grep -q "^$CTRL_ERR_VERSION$" "$bad_hello_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control malformed HELLO version (RP2P/x): expected ERROR:version mismatch, got $(tr '\n' '|' < "$bad_hello_out" | head -c 60)"
+        kc_test_fail "control malformed handshake version: expected $CTRL_ERR_VERSION, got $(tr '\n' '|' < "$bad_hello_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control reject HELLO RP2P/x"
+    kc_test_pass "control reject malformed handshake version"
 
-    if ! printf 'HELLO RP2P/1\nHELLO RP2P/1\n' | nc -w 2 127.0.0.1 "$port" > "$repeat_hello_out" 2>/dev/null; then
+    if ! printf '%s\n%s\n' "$CTRL_HELLO" "$CTRL_HELLO" | nc -w 2 127.0.0.1 "$port" > "$repeat_hello_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control repeat HELLO: expected OK:HELLO then ERROR:version mismatch, nc failed"
+        kc_test_fail "control repeat handshake: expected $CTRL_HELLO_OK then $CTRL_ERR_VERSION, nc failed"
         return 1
     fi
-    if ! grep -q '^OK:HELLO$' "$repeat_hello_out" || ! grep -q '^ERROR:version mismatch$' "$repeat_hello_out"; then
+    if ! grep -q "^$CTRL_HELLO_OK$" "$repeat_hello_out" || ! grep -q "^$CTRL_ERR_VERSION$" "$repeat_hello_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control repeat HELLO: expected both OK:HELLO and ERROR:version mismatch, got $(tr '\n' '|' < "$repeat_hello_out" | head -c 80)"
+        kc_test_fail "control repeat handshake: expected both $CTRL_HELLO_OK and $CTRL_ERR_VERSION, got $(tr '\n' '|' < "$repeat_hello_out" | head -c 80)"
         return 1
     fi
-    kc_test_pass "control reject duplicate HELLO"
+    kc_test_pass "control reject duplicate handshake"
 
-    if ! printf 'HELLO RP2P/1\nLIST\n' | nc -w 2 127.0.0.1 "$port" > "$list_out" 2>/dev/null; then
+    if ! printf '%s\n%s\n' "$CTRL_HELLO" "$CTRL_LIST" | nc -w 2 127.0.0.1 "$port" > "$list_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control LIST after register: expected PEER line, nc failed"
+        kc_test_fail "control $CTRL_LIST after register: expected $CTRL_PEER line, nc failed"
         return 1
     fi
-    if ! grep -q '^PEER:control$' "$list_out"; then
+    if ! grep -q "^${CTRL_PEER}control$" "$list_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control LIST after register: expected PEER:control, got $(tr '\n' '|' < "$list_out" | head -c 60)"
+        kc_test_fail "control $CTRL_LIST after register: expected ${CTRL_PEER}control, got $(tr '\n' '|' < "$list_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control LIST returns registered peer"
+    kc_test_pass "control $CTRL_LIST returns registered peer"
 
-    if ! printf 'HELLO RP2P/1\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$lookup_out" 2>/dev/null; then
+    if ! printf '%s\n%scontrol\n' "$CTRL_HELLO" "$CTRL_LOOKUP" | nc -w 2 127.0.0.1 "$port" > "$lookup_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control LOOKUP existing peer: expected PEER:control, nc failed"
+        kc_test_fail "control lookup existing peer: expected ${CTRL_PEER}control, nc failed"
         return 1
     fi
-    if ! grep -q '^PEER:control$' "$lookup_out"; then
+    if ! grep -q "^${CTRL_PEER}control$" "$lookup_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control LOOKUP existing peer: expected PEER:control, got $(tr '\n' '|' < "$lookup_out" | head -c 60)"
+        kc_test_fail "control lookup existing peer: expected ${CTRL_PEER}control, got $(tr '\n' '|' < "$lookup_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control LOOKUP returns registered peer"
+    kc_test_pass "control lookup returns registered peer"
 
-    if ! printf 'HELLO RP2P/1\nLOOKUP:control:extra\n' | nc -w 2 127.0.0.1 "$port" > "$bad_lookup_out" 2>/dev/null; then
+    if ! printf '%s\n%scontrol:extra\n' "$CTRL_HELLO" "$CTRL_LOOKUP" | nc -w 2 127.0.0.1 "$port" > "$bad_lookup_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control LOOKUP with extra fields: expected ERROR:malformed, nc failed"
+        kc_test_fail "control lookup with extra fields: expected $CTRL_ERR_MALFORMED, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:malformed$' "$bad_lookup_out"; then
+    if ! grep -q "^$CTRL_ERR_MALFORMED$" "$bad_lookup_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control LOOKUP with extra fields: expected ERROR:malformed, got $(tr '\n' '|' < "$bad_lookup_out" | head -c 60)"
+        kc_test_fail "control lookup with extra fields: expected $CTRL_ERR_MALFORMED, got $(tr '\n' '|' < "$bad_lookup_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control reject malformed LOOKUP"
+    kc_test_pass "control reject malformed lookup"
 
-    if ! printf 'HELLO RP2P/1\nLIST\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$multi_out" 2>/dev/null; then
+    if ! printf '%s\n%s\n%scontrol\n' "$CTRL_HELLO" "$CTRL_LIST" "$CTRL_LOOKUP" | nc -w 2 127.0.0.1 "$port" > "$multi_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control multi-command (LIST + LOOKUP): expected PEER lines, nc failed"
+        kc_test_fail "control multi-command ($CTRL_LIST + $CTRL_LOOKUP): expected $CTRL_PEER lines, nc failed"
         return 1
     fi
-    if ! grep -q '^PEER:control$' "$multi_out"; then
+    if ! grep -q "^${CTRL_PEER}control$" "$multi_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control multi-command: expected PEER:control in output, got $(tr '\n' '|' < "$multi_out" | head -c 80)"
+        kc_test_fail "control multi-command: expected ${CTRL_PEER}control in output, got $(tr '\n' '|' < "$multi_out" | head -c 80)"
         return 1
     fi
     kc_test_pass "control multi-command pipelining"
 
-    if ! printf 'HELLO RP2P/1\nPUNCH_REQ2:c-1:control:abc\nCAND:bad:127.0.0.1:1\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$bad_punch_out" 2>/dev/null; then
+    if ! printf '%s\n%sc-1:control:abc\n%sbad:127.0.0.1:1\n%s\n' "$CTRL_HELLO" "$CTRL_PUNCH_REQ2" "$CTRL_CAND" "$CTRL_END" | nc -w 2 127.0.0.1 "$port" > "$bad_punch_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control PUNCH_REQ2 with bad candidate: expected ERROR:malformed, nc failed"
+        kc_test_fail "control punch request with bad candidate: expected $CTRL_ERR_MALFORMED, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:malformed$' "$bad_punch_out"; then
+    if ! grep -q "^$CTRL_ERR_MALFORMED$" "$bad_punch_out"; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control PUNCH_REQ2 with bad candidate type: expected ERROR:malformed, got $(tr '\n' '|' < "$bad_punch_out" | head -c 60)"
+        kc_test_fail "control punch request with bad candidate type: expected $CTRL_ERR_MALFORMED, got $(tr '\n' '|' < "$bad_punch_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control reject punch with bad candidate type"
+    kc_test_pass "control reject punch request with bad candidate type"
 
     if ! "$BIN" del control@127.0.0.1:"$port" > "$TMP_ROOT/control-del.log" 2>&1; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control DEREGISTER via CLI: expected exit 0, got non-zero"
+        kc_test_fail "control deregistration via CLI: expected exit 0, got non-zero"
         return 1
     fi
-    kc_test_pass "control DEREGISTER via CLI"
+    kc_test_pass "control deregistration via CLI"
 
-    if ! printf 'HELLO RP2P/1\nLOOKUP:control\n' | nc -w 2 127.0.0.1 "$port" > "$miss_out" 2>/dev/null; then
+    if ! printf '%s\n%scontrol\n' "$CTRL_HELLO" "$CTRL_LOOKUP" | nc -w 2 127.0.0.1 "$port" > "$miss_out" 2>/dev/null; then
         kc_test_kill "$spid" "$HPID"
-        kc_test_fail "control LOOKUP after deregister: expected NOT_FOUND, nc failed"
+        kc_test_fail "control ${CTRL_LOOKUP}* after deregister: expected $CTRL_NOT_FOUND, nc failed"
         return 1
     fi
     kc_test_kill "$spid" "$HPID"
-    if ! grep -q '^NOT_FOUND$' "$miss_out"; then
-        kc_test_fail "control LOOKUP after deregister: expected NOT_FOUND, got $(tr '\n' '|' < "$miss_out" | head -c 60)"
+    if ! grep -q "^$CTRL_NOT_FOUND$" "$miss_out"; then
+        kc_test_fail "control ${CTRL_LOOKUP}* after deregister: expected $CTRL_NOT_FOUND, got $(tr '\n' '|' < "$miss_out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "control LOOKUP confirms deregistration"
+    kc_test_pass "control lookup confirms deregistration"
     return 0
 }
 
@@ -602,14 +625,14 @@ kc_test_ipv6_loopback() {
         return 0
     fi
     kc_test_index_start "$port" 0 "" ipv6 || return 1
-    if ! printf 'HELLO RP2P/1\nLIST\n' | socat -t 2 - "TCP6:[::1]:$port" > "$list_out" 2>/dev/null; then
+    if ! printf '%s\n%s\n' "$CTRL_HELLO" "$CTRL_LIST" | socat -t 2 - "TCP6:[::1]:$port" > "$list_out" 2>/dev/null; then
         kc_test_index_stop
-        kc_test_fail "IPv6 control over [::1]:$port: expected successful LIST via TCP6, socat failed"
+        kc_test_fail "IPv6 control over [::1]:$port: expected successful $CTRL_LIST via TCP6, socat failed"
         return 1
     fi
-    if ! grep -q '^END$' "$list_out"; then
+    if ! grep -q "^$CTRL_END$" "$list_out"; then
         kc_test_index_stop
-        kc_test_fail "IPv6 control LIST over [::1]:$port: expected END line, got $(tr '\n' '|' < "$list_out" | head -c 60)"
+        kc_test_fail "IPv6 control $CTRL_LIST over [::1]:$port: expected $CTRL_END, got $(tr '\n' '|' < "$list_out" | head -c 60)"
         return 1
     fi
     kc_test_pass "IPv6 control protocol over loopback"
@@ -1345,140 +1368,140 @@ kc_test_tcp_loss_moderate() {
 kc_test_protocol_vectors() {
     port=$1
     out="$TMP_ROOT/proto-unknown.out"
-    if ! printf 'HELLO RP2P/1\nBOGUS\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol unknown command BOGUS: expected ERROR:unknown command, nc failed"
+    if ! printf '%s\nBOGUS\n' "$CTRL_HELLO" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol unknown command BOGUS: expected $CTRL_ERR_UNKNOWN, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:unknown command$' "$out"; then
-        kc_test_fail "protocol unknown command BOGUS: expected ERROR:unknown command, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_UNKNOWN$" "$out"; then
+        kc_test_fail "protocol unknown command BOGUS: expected $CTRL_ERR_UNKNOWN, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
     kc_test_pass "protocol reject unknown command"
     out="$TMP_ROOT/proto-reg-bad-id.out"
-    if ! printf 'HELLO RP2P/1\nREGISTER:bad id\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol REGISTER with spaces in id: expected ERROR:invalid id, nc failed"
+    if ! printf '%s\n%sbad id\n' "$CTRL_HELLO" "$CTRL_REGISTER" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol register with spaces in id: expected $CTRL_ERR_INVALID_ID, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:invalid id$' "$out"; then
-        kc_test_fail "protocol REGISTER with spaces: expected ERROR:invalid id, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_INVALID_ID$" "$out"; then
+        kc_test_fail "protocol register with spaces: expected $CTRL_ERR_INVALID_ID, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol reject REGISTER with space in id"
+    kc_test_pass "protocol reject register with space in id"
     out="$TMP_ROOT/proto-reg-colon-id.out"
-    if ! printf 'HELLO RP2P/1\nREGISTER:bad:id\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol REGISTER with colon in id: expected ERROR:invalid id, nc failed"
+    if ! printf '%s\n%sbad:id\n' "$CTRL_HELLO" "$CTRL_REGISTER" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol register with colon in id: expected $CTRL_ERR_INVALID_ID, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:invalid id$' "$out"; then
-        kc_test_fail "protocol REGISTER with colon: expected ERROR:invalid id, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_INVALID_ID$" "$out"; then
+        kc_test_fail "protocol register with colon: expected $CTRL_ERR_INVALID_ID, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol reject REGISTER with colon in id"
+    kc_test_pass "protocol reject register with colon in id"
     out="$TMP_ROOT/proto-reg-empty.out"
-    if ! printf 'HELLO RP2P/1\nREGISTER:\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol REGISTER with empty id: expected ERROR:invalid id, nc failed"
+    if ! printf '%s\n%s\n' "$CTRL_HELLO" "$CTRL_REGISTER" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol register with empty id: expected $CTRL_ERR_INVALID_ID, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:invalid id$' "$out"; then
-        kc_test_fail "protocol REGISTER empty id: expected ERROR:invalid id, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_INVALID_ID$" "$out"; then
+        kc_test_fail "protocol register empty id: expected $CTRL_ERR_INVALID_ID, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol reject REGISTER with empty id"
+    kc_test_pass "protocol reject register with empty id"
     out="$TMP_ROOT/proto-reg-valid.out"
-    if ! printf 'HELLO RP2P/1\nREGISTER:validproto\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol REGISTER valid id: expected CHALLENGE response, nc failed"
+    if ! printf '%s\n%svalidproto\n' "$CTRL_HELLO" "$CTRL_REGISTER" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol register valid id: expected $CTRL_CHALLENGE response, nc failed"
         return 1
     fi
-    if grep -q '^ERROR:' "$out"; then
-        _err=$(grep '^ERROR:' "$out" | head -1)
-        kc_test_fail "protocol REGISTER valid id: expected no ERROR, got $_err"
+    if grep -q '^RP2P_CTRTOK_ERROR:' "$out"; then
+        _err=$(grep '^RP2P_CTRTOK_ERROR:' "$out" | head -1)
+        kc_test_fail "protocol register valid id: expected no RP2P_CTRTOK_ERROR, got $_err"
         return 1
     fi
-    if ! grep -q '^CHALLENGE:' "$out"; then
-        kc_test_fail "protocol REGISTER valid id: expected CHALLENGE line, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_CHALLENGE" "$out"; then
+        kc_test_fail "protocol register valid id: expected $CTRL_CHALLENGE line, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol REGISTER valid id returns CHALLENGE"
+    kc_test_pass "protocol register valid id returns $CTRL_CHALLENGE"
     out="$TMP_ROOT/proto-reg-bad-sol.out"
-    if ! printf 'HELLO RP2P/1\nREGISTER:badproof:SOLUTION:xx:PROOF:yy\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol REGISTER with bad proof: expected AUTH_FAILED, nc failed"
+    if ! printf '%s\n%sbadproof:SOLUTION:xx:PROOF:yy\n' "$CTRL_HELLO" "$CTRL_REGISTER" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol $CTRL_REGISTER with bad proof: expected $CTRL_AUTH_FAILED, nc failed"
         return 1
     fi
-    if ! grep -q '^AUTH_FAILED$' "$out"; then
-        kc_test_fail "protocol REGISTER bad proof: expected AUTH_FAILED, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_AUTH_FAILED$" "$out"; then
+        kc_test_fail "protocol $CTRL_REGISTER bad proof: expected $CTRL_AUTH_FAILED, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol REGISTER bad proof returns AUTH_FAILED"
+    kc_test_pass "protocol $CTRL_REGISTER bad proof returns $CTRL_AUTH_FAILED"
     out="$TMP_ROOT/proto-list-extra.out"
-    if ! printf 'HELLO RP2P/1\nLIST:extra\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol LIST with extra fields: expected ERROR:malformed, nc failed"
+    if ! printf '%s\n%s:extra\n' "$CTRL_HELLO" "$CTRL_LIST" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol $CTRL_LIST with extra fields: expected $CTRL_ERR_MALFORMED, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:malformed$' "$out"; then
-        kc_test_fail "protocol LIST with extra: expected ERROR:malformed, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_MALFORMED$" "$out"; then
+        kc_test_fail "protocol $CTRL_LIST with extra: expected $CTRL_ERR_MALFORMED, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol reject LIST with extra fields"
+    kc_test_pass "protocol reject $CTRL_LIST with extra fields"
     out="$TMP_ROOT/proto-dereg-no-key.out"
-    if ! printf 'HELLO RP2P/1\nDEREGISTER:test\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol DEREGISTER without key: expected ERROR:malformed, nc failed"
+    if ! printf '%s\n%stest\n' "$CTRL_HELLO" "$CTRL_DEREGISTER" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol deregistration without key: expected $CTRL_ERR_MALFORMED, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:malformed$' "$out"; then
-        kc_test_fail "protocol DEREGISTER no key: expected ERROR:malformed, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_MALFORMED$" "$out"; then
+        kc_test_fail "protocol deregistration without key: expected $CTRL_ERR_MALFORMED, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol reject DEREGISTER without key"
+    kc_test_pass "protocol reject deregistration without key"
     out="$TMP_ROOT/proto-dereg-bad-key.out"
-    if ! printf 'HELLO RP2P/1\nDEREGISTER:nonexistent:KEY:abc\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol DEREGISTER nonexistent with bad key: expected ERROR:invalid key, nc failed"
+    if ! printf '%s\n%snonexistent:KEY:abc\n' "$CTRL_HELLO" "$CTRL_DEREGISTER" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol deregistration with bad key: expected $CTRL_ERR_INVALID_KEY, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:invalid key$' "$out"; then
-        kc_test_fail "protocol DEREGISTER bad key: expected ERROR:invalid key, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_INVALID_KEY$" "$out"; then
+        kc_test_fail "protocol deregistration with bad key: expected $CTRL_ERR_INVALID_KEY, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol reject DEREGISTER with nonexistent key"
+    kc_test_pass "protocol reject deregistration with nonexistent key"
     out="$TMP_ROOT/proto-punch-bad-self.out"
-    if ! printf 'HELLO RP2P/1\nPUNCH_REQ2:bad@self:target:sess\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol PUNCH_REQ2 with @ in self id: expected ERROR:malformed, nc failed"
+    if ! printf '%s\n%sbad@self:target:sess\n%s\n' "$CTRL_HELLO" "$CTRL_PUNCH_REQ2" "$CTRL_END" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol punch request with @ in self id: expected $CTRL_ERR_MALFORMED, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:malformed$' "$out"; then
-        kc_test_fail "protocol PUNCH_REQ2 bad self: expected ERROR:malformed, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_MALFORMED$" "$out"; then
+        kc_test_fail "protocol punch request bad self id: expected $CTRL_ERR_MALFORMED, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol reject PUNCH_REQ2 with @ in self id"
+    kc_test_pass "protocol reject punch request with @ in self id"
     out="$TMP_ROOT/proto-punch-extra.out"
-    if ! printf 'HELLO RP2P/1\nPUNCH_REQ2:c-1:target:sess:extra\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol PUNCH_REQ2 with extra fields: expected ERROR:malformed, nc failed"
+    if ! printf '%s\n%sc-1:target:sess:extra\n%s\n' "$CTRL_HELLO" "$CTRL_PUNCH_REQ2" "$CTRL_END" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol punch request with extra fields: expected $CTRL_ERR_MALFORMED, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:malformed$' "$out"; then
-        kc_test_fail "protocol PUNCH_REQ2 extra fields: expected ERROR:malformed, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_MALFORMED$" "$out"; then
+        kc_test_fail "protocol punch request extra fields: expected $CTRL_ERR_MALFORMED, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol reject PUNCH_REQ2 with extra fields"
+    kc_test_pass "protocol reject punch request with extra fields"
     out="$TMP_ROOT/proto-punch-ipv6-cand.out"
-    if ! printf 'HELLO RP2P/1\nPUNCH_REQ2:c-1:nosuch:sess\nCAND:HOST:[::1]:1234\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol PUNCH_REQ2 to missing peer: expected no ERROR for valid IPv6 candidate, nc failed"
+    if ! printf '%s\n%sc-1:nosuch:sess\n%sHOST:[::1]:1234\n%s\n' "$CTRL_HELLO" "$CTRL_PUNCH_REQ2" "$CTRL_CAND" "$CTRL_END" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol punch request to missing peer: expected no RP2P_CTRTOK_ERROR for valid IPv6 candidate, nc failed"
         return 1
     fi
-    if grep -q '^ERROR:malformed$' "$out"; then
-        kc_test_fail "protocol PUNCH_REQ2 IPv6 candidate: expected no ERROR:malformed, but got it"
+    if grep -q "^$CTRL_ERR_MALFORMED$" "$out"; then
+        kc_test_fail "protocol punch request IPv6 candidate: expected no $CTRL_ERR_MALFORMED, but got it"
         return 1
     fi
-    kc_test_pass "protocol accept IPv6 candidate in PUNCH_REQ2"
+    kc_test_pass "protocol accept IPv6 candidate in punch request"
     out="$TMP_ROOT/proto-ack-bad.out"
-    if ! printf 'HELLO RP2P/1\nPUNCH_ACK2:validtarget:bad@ack:sess\nEND\n' | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
-        kc_test_fail "protocol PUNCH_ACK2 with @ in ack id: expected ERROR:malformed, nc failed"
+    if ! printf '%s\n%svalidtarget:bad@ack:sess\n%s\n' "$CTRL_HELLO" "$CTRL_PUNCH_ACK2" "$CTRL_END" | nc -w 2 127.0.0.1 "$port" > "$out" 2>/dev/null; then
+        kc_test_fail "protocol punch ack with @ in id: expected $CTRL_ERR_MALFORMED, nc failed"
         return 1
     fi
-    if ! grep -q '^ERROR:malformed$' "$out"; then
-        kc_test_fail "protocol PUNCH_ACK2 bad id: expected ERROR:malformed, got $(tr '\n' '|' < "$out" | head -c 60)"
+    if ! grep -q "^$CTRL_ERR_MALFORMED$" "$out"; then
+        kc_test_fail "protocol punch ack bad id: expected $CTRL_ERR_MALFORMED, got $(tr '\n' '|' < "$out" | head -c 60)"
         return 1
     fi
-    kc_test_pass "protocol reject PUNCH_ACK2 with @ in id"
+    kc_test_pass "protocol reject punch ack with @ in id"
     kc_test_pass "protocol: all adversarial vectors handled correctly"
     return 0
 }

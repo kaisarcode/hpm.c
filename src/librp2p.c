@@ -109,9 +109,40 @@ typedef int rp2p_fd_t;
 #define RP2P_CTRL_LINE_MAX     1024
 #define RP2P_CTRL_FIELD_MAX     256
 #define RP2P_CTRL_SESSION_MAX    63
-#define RP2P_CTRL_HELLO          "HELLO RP2P/1"
-#define RP2P_CTRL_HELLO_OK       "OK:HELLO"
-#define RP2P_CTRL_VERSION_ERROR  "ERROR:version mismatch"
+#define RP2P_CTRTOK_HELLO        "RP2P_CTRTOK_HELLO RP2P/1"
+#define RP2P_CTRTOK_HELLO_OK     "RP2P_CTRTOK_HELLO_OK"
+#define RP2P_CTRTOK_ERROR_VERSION_MISMATCH "RP2P_CTRTOK_ERROR:version mismatch"
+
+#define RP2P_CTRTOK_REGISTER     "RP2P_CTRTOK_REGISTER:"
+#define RP2P_CTRTOK_DEREGISTER   "RP2P_CTRTOK_DEREGISTER:"
+#define RP2P_CTRTOK_LOOKUP       "RP2P_CTRTOK_LOOKUP:"
+#define RP2P_CTRTOK_LIST         "RP2P_CTRTOK_LIST"
+#define RP2P_CTRTOK_PEER         "RP2P_CTRTOK_PEER:"
+#define RP2P_CTRTOK_END          "RP2P_CTRTOK_END"
+#define RP2P_CTRTOK_CHALLENGE    "RP2P_CTRTOK_CHALLENGE:"
+#define RP2P_CTRTOK_OK           "RP2P_CTRTOK_OK"
+#define RP2P_CTRTOK_OK_KEY       "RP2P_CTRTOK_OK:KEY:"
+#define RP2P_CTRTOK_AUTH_FAILED  "RP2P_CTRTOK_AUTH_FAILED"
+#define RP2P_CTRTOK_NOT_FOUND    "RP2P_CTRTOK_NOT_FOUND"
+#define RP2P_CTRTOK_PUNCH_REQ2   "RP2P_CTRTOK_PUNCH_REQ2:"
+#define RP2P_CTRTOK_PUNCH_ACK2   "RP2P_CTRTOK_PUNCH_ACK2:"
+#define RP2P_CTRTOK_PUNCH_CALL2  "RP2P_CTRTOK_PUNCH_CALL2:"
+#define RP2P_CTRTOK_PUNCH_OK2    "RP2P_CTRTOK_PUNCH_OK2:"
+#define RP2P_CTRTOK_CAND         "RP2P_CTRTOK_CAND:"
+#define RP2P_CTRTOK_PUNCH        "RP2P_CTRTOK_PUNCH:"
+#define RP2P_CTRTOK_PUNCH_SERVER "RP2P_CTRTOK_PUNCH:server"
+#define RP2P_CTRTOK_PUNCH_PING   "RP2P_CTRTOK_PUNCH_PING:"
+#define RP2P_CTRTOK_PUNCH_PONG   "RP2P_CTRTOK_PUNCH_PONG:"
+#define RP2P_CTRTOK_KA           "RP2P_CTRTOK_KA:"
+#define RP2P_CTRTOK_ERROR_MALFORMED "RP2P_CTRTOK_ERROR:malformed"
+#define RP2P_CTRTOK_ERROR_INVALID_ID "RP2P_CTRTOK_ERROR:invalid id"
+#define RP2P_CTRTOK_ERROR_PEER_TABLE_FULL "RP2P_CTRTOK_ERROR:peer table full"
+#define RP2P_CTRTOK_ERROR_NOT_REGISTERED "RP2P_CTRTOK_ERROR:not registered"
+#define RP2P_CTRTOK_ERROR_BUSY "RP2P_CTRTOK_ERROR:busy"
+#define RP2P_CTRTOK_ERROR_RANDOM "RP2P_CTRTOK_ERROR:random"
+#define RP2P_CTRTOK_ERROR_OFFLINE "RP2P_CTRTOK_ERROR:offline"
+#define RP2P_CTRTOK_ERROR_INVALID_KEY "RP2P_CTRTOK_ERROR:invalid key"
+#define RP2P_CTRTOK_ERROR_UNKNOWN_COMMAND "RP2P_CTRTOK_ERROR:unknown command"
 
 #define RP2P_STREAM_TYPE_HELLO     1u
 #define RP2P_STREAM_TYPE_HELLO_ACK 2u
@@ -275,11 +306,6 @@ static const uint32_t rp2p_sha256_k[64] = {
 #define RP2P_SHA256_s1(x) (RP2P_SHA256_ROR(x, 17) ^ RP2P_SHA256_ROR(x, 19) ^ ((x) >> 10))
 
 /**
- * sha256 transform.
- * @return None.
- */
-
-/**
  * Sha256 transform.
  * @return Status code.
  */
@@ -305,11 +331,6 @@ static void rp2p_sha256_transform(uint32_t state[8], const unsigned char block[6
 }
 
 /**
- * sha256 init.
- * @return None.
- */
-
-/**
  * Sha256 init.
  * @return Status code.
  */
@@ -320,11 +341,6 @@ static void rp2p_sha256_init(rp2p_sha256_t *ctx) {
     ctx->state[6] = 0x1f83d9ab; ctx->state[7] = 0x5be0cd19;
     ctx->count = 0;
 }
-
-/**
- * sha256 update.
- * @return None.
- */
 
 /**
  * Sha256 update.
@@ -339,11 +355,6 @@ static void rp2p_sha256_update(rp2p_sha256_t *ctx, const unsigned char *data, si
             rp2p_sha256_transform(ctx->state, ctx->buf);
     }
 }
-
-/**
- * sha256 final.
- * @return None.
- */
 
 /**
  * Sha256 final.
@@ -829,11 +840,6 @@ static int rp2p_stream_should_reorder_once(const unsigned char *buf, size_t len)
 }
 
 /**
- * lock.
- * @return None.
- */
-
-/**
  * Lock.
  * @return Status code.
  */
@@ -844,11 +850,6 @@ static void rp2p_lock(rp2p_t *ctx) {
     pthread_mutex_lock(&ctx->mutex);
 #endif
 }
-
-/**
- * unlock.
- * @return None.
- */
 
 /**
  * Unlock.
@@ -1872,11 +1873,6 @@ static void rp2p_consumer_session_close(rp2p_udp_consumer_session_t *sess) {
 }
 
 /**
- * signal handler.
- * @return None.
- */
-
-/**
  * Signal handler.
  * @return Status code.
  */
@@ -1888,11 +1884,6 @@ static void rp2p_signal_handler(int sig) {
     signal(sig, SIG_DFL);
     raise(sig);
 }
-
-/**
- * on signal.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * On signal.
@@ -1939,11 +1930,6 @@ int rp2p_on_signal(
 }
 
 /**
- * raise signal.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Raise signal.
  * @return 0 on success, -1 on error.
  */
@@ -1961,11 +1947,6 @@ int rp2p_raise_signal(rp2p_t *ctx, int sig) {
 }
 
 /**
- * listen signals.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Listen signals.
  * @return 0 on success, -1 on error.
  */
@@ -1974,11 +1955,6 @@ int rp2p_listen_signals(rp2p_t *ctx) {
     g_signal_ctx = ctx;
     return RP2P_OK;
 }
-
-/**
- * listen signal.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Listen signal.
@@ -2002,11 +1978,6 @@ void *rp2p_signal_listener(void *arg) {
 #ifdef _WIN32
 
 /**
- * platform init.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Platform init.
  * @return 0 on success, -1 on error.
  */
@@ -2014,11 +1985,6 @@ int rp2p_platform_init(void) {
     WSADATA w;
     return WSAStartup(MAKEWORD(2, 2), &w) == 0 ? 0 : -1;
 }
-
-/**
- * platform cleanup.
- * @return None.
- */
 
 /**
  * Platform cleanup.
@@ -2033,11 +1999,6 @@ void rp2p_platform_cleanup(void) { WSACleanup(); }
  * @return 0 on success, -1 on error.
  */
 int rp2p_platform_init(void) { return 0; }
-
-/**
- * platform cleanup.
- * @return None.
- */
 
 /**
  * Platform cleanup.
@@ -2062,11 +2023,6 @@ int rp2p_set_nonblock(rp2p_fd_t fd) {
 }
 
 /**
- * set block.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Set block.
  * @return 0 on success, -1 on error.
  */
@@ -2079,11 +2035,6 @@ int rp2p_set_block(rp2p_fd_t fd) {
     return fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
 #endif
 }
-
-/**
- * resolve.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Resolve.
@@ -2225,11 +2176,6 @@ static int rp2p_host_is_ipv6_literal(const char *host) {
 }
 
 /**
- * extract addr.
- * @return None.
- */
-
-/**
  * Extract addr.
  * @return None.
  */
@@ -2250,11 +2196,6 @@ void rp2p_extract_addr(
 }
 
 /**
- * send reply.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Send reply.
  * @return 0 on success, -1 on error.
  */
@@ -2268,11 +2209,6 @@ int rp2p_send_reply(
         (const struct sockaddr *)to, tolen) > 0
         ? RP2P_OK : RP2P_ENET;
 }
-
-/**
- * send recv.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Send recv.
@@ -2319,11 +2255,6 @@ int rp2p_send_recv(
     recv_buf[n] = '\0';
     return RP2P_OK;
 }
-
-/**
- * create socket.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Create socket.
@@ -2376,11 +2307,6 @@ rp2p_fd_t rp2p_create_socket(
 }
 
 /**
- * create tcp listener.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Create tcp listener.
  * @return 0 on success, -1 on error.
  */
@@ -2428,11 +2354,6 @@ static rp2p_fd_t rp2p_create_tcp_listener(
 }
 
 /**
- * connect local tcp.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Connect local tcp.
  * @return 0 on success, -1 on error.
  */
@@ -2454,11 +2375,6 @@ static rp2p_fd_t rp2p_connect_local_tcp(unsigned short port) {
 }
 
 /**
- * sock read.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Sock read.
  * @return 0 on success, -1 on error.
  */
@@ -2471,11 +2387,6 @@ static int rp2p_sock_read(rp2p_fd_t fd, char *buf, int len) {
 }
 
 /**
- * sock write.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Sock write.
  * @return 0 on success, -1 on error.
  */
@@ -2486,11 +2397,6 @@ static int rp2p_sock_write(rp2p_fd_t fd, const char *buf, int len) {
     return (int)write(fd, buf, (size_t)len);
 #endif
 }
-
-/**
- * write all.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Write all.
@@ -2520,11 +2426,6 @@ static void rp2p_shutdown_write(rp2p_fd_t fd) {
     shutdown(fd, SHUT_WR);
 #endif
 }
-
-/**
- * tcp connect.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Tcp connect.
@@ -2557,11 +2458,6 @@ static rp2p_fd_t rp2p_tcp_connect(const char *host, unsigned short port) {
 }
 
 /**
- * tcp send.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Tcp send.
  * @return 0 on success, -1 on error.
  */
@@ -2572,11 +2468,6 @@ static int rp2p_tcp_send(rp2p_fd_t fd, const char *msg) {
     if (rp2p_write_all(fd, "\n", 1) != 0) return RP2P_ENET;
     return RP2P_OK;
 }
-
-/**
- * tcp readline.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Tcp readline.
@@ -2633,9 +2524,9 @@ static rp2p_fd_t rp2p_control_connect(const char *index_host,
 
     fd = rp2p_tcp_connect(index_host, index_port);
     if (RP2P_ISERR(fd)) return fd;
-    if (rp2p_tcp_send(fd, RP2P_CTRL_HELLO) != RP2P_OK ||
+    if (rp2p_tcp_send(fd, RP2P_CTRTOK_HELLO) != RP2P_OK ||
         rp2p_tcp_readline(fd, reply, (int)sizeof(reply), 5) < 0 ||
-        strcmp(reply, RP2P_CTRL_HELLO_OK) != 0)
+        strcmp(reply, RP2P_CTRTOK_HELLO_OK) != 0)
     {
         RP2P_FD_CLOSE(fd);
         return RP2P_FD_INVALID;
@@ -2851,11 +2742,6 @@ static const char *rp2p_get_register_pass(rp2p_t *ctx, const char *id) {
 }
 
 /**
- * open.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Open.
  * @return 0 on success, -1 on error.
  */
@@ -2899,11 +2785,6 @@ int rp2p_open(rp2p_t **out) {
     *out = ctx;
     return RP2P_OK;
 }
-
-/**
- * close.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Close.
@@ -2968,11 +2849,6 @@ rp2p_options_t rp2p_options_default(void) {
 }
 
 /**
- * options load env.
- * @return None.
- */
-
-/**
  * Options load env.
  * @return None.
  */
@@ -2995,7 +2871,7 @@ void rp2p_options_load_env(rp2p_options_t *opts) {
         }
     }
 
-    val = getenv("P2P_BIND");
+    val = getenv("RP2P_BIND");
     if (val) {
         colon = strchr(val, ':');
         if (colon) {
@@ -3039,11 +2915,6 @@ void rp2p_options_load_env(rp2p_options_t *opts) {
 }
 
 /**
- * options free.
- * @return None.
- */
-
-/**
  * Options free.
  * @return None.
  */
@@ -3067,11 +2938,6 @@ int rp2p_set_seats(rp2p_t *ctx, int seats) {
 }
 
 /**
- * set pow.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Set pow.
  * @return 0 on success, -1 on error.
  */
@@ -3083,11 +2949,6 @@ int rp2p_set_pow(rp2p_t *ctx, int bits) {
 }
 
 /**
- * set port.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Set port.
  * @return 0 on success, -1 on error.
  */
@@ -3096,11 +2957,6 @@ int rp2p_set_port(rp2p_t *ctx, unsigned short port) {
     ctx->bind_port = port;
     return RP2P_OK;
 }
-
-/**
- * set protocol.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Set protocol.
@@ -3210,11 +3066,6 @@ size_t err_cap
 }
 
 /**
- * find peer.
- * @return 0 on success, -1 on error.
- */
-
-/**
  * Find peer.
  * @return 0 on success, -1 on error.
  */
@@ -3226,11 +3077,6 @@ static int rp2p_find_peer(rp2p_t *ctx, const char *id) {
     }
     return -1;
 }
-
-/**
- * evict stale.
- * @return None.
- */
 
 /**
  * Evict stale.
@@ -3252,11 +3098,6 @@ static void rp2p_evict_stale(rp2p_t *ctx) {
 }
 
 /**
- * generate key.
- * @return None.
- */
-
-/**
  * Generate key.
  * @return Status code.
  */
@@ -3269,11 +3110,6 @@ static int rp2p_generate_key(char *out) {
     return rp2p_hex_encode(random_bytes, sizeof(random_bytes), out,
         RP2P_KEY_SZ + 1);
 }
-
-/**
- * add peer.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Add peer.
@@ -3311,11 +3147,6 @@ static int rp2p_add_peer(rp2p_t *ctx, const char *id)
     ctx->n_peers++;
     return RP2P_OK;
 }
-
-/**
- * remove peer.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Remove peer.
@@ -3434,14 +3265,10 @@ static int rp2p_format_register_ok(rp2p_t *ctx, const char *id,
 
     pidx = rp2p_find_peer(ctx, id);
     if (pidx < 0) return 0;
-    snprintf(reply, reply_sz, "OK:KEY:%s", ctx->peers[pidx].key);
+    snprintf(reply, reply_sz, "%s%s", RP2P_CTRTOK_OK_KEY,
+        ctx->peers[pidx].key);
     return 1;
 }
-
-/**
- * conn add.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Conn add.
@@ -3464,11 +3291,6 @@ static int rp2p_conn_add(rp2p_t *ctx, int fd) {
     ctx->n_conns++;
     return RP2P_OK;
 }
-
-/**
- * conn remove.
- * @return None.
- */
 
 /**
  * Conn remove.
@@ -3819,8 +3641,10 @@ static int rp2p_parse_candidate_line(const char *line,
     struct in6_addr ipv6;
     size_t addr_len;
 
-    if (!line || !out || strncmp(line, "CAND:", 5) != 0) return 0;
-    cursor = line + 5;
+    if (!line || !out || strncmp(line, RP2P_CTRTOK_CAND,
+        strlen(RP2P_CTRTOK_CAND)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_CAND);
     if (!rp2p_parse_field(&cursor, type_text, sizeof(type_text), ':'))
         return 0;
     if (*cursor == '[') {
@@ -3867,7 +3691,8 @@ static int rp2p_find_end_line(char *start, char *limit, char **end) {
         (newline = (char *)memchr(cursor, '\n', (size_t)(limit - cursor))) != NULL)
     {
         size_t len = (size_t)(newline - cursor);
-        if (len == 3 && memcmp(cursor, "END", 3) == 0) {
+        if (len == strlen(RP2P_CTRTOK_END) &&
+            memcmp(cursor, RP2P_CTRTOK_END, strlen(RP2P_CTRTOK_END)) == 0) {
             *end = newline + 1;
             return 1;
         }
@@ -3875,16 +3700,6 @@ static int rp2p_find_end_line(char *start, char *limit, char **end) {
     }
     return 0;
 }
-
-/**
- * serve index.
- * @return 0 on success, -1 on error.
- */
-
-/**
- * Serve index.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Parse remote candidates.
@@ -3902,7 +3717,13 @@ static int rp2p_parse_remote_candidates(const char *buf,
     if (!buf || !out || !out_count) return 0;
     *out_count = 0;
     p = buf;
-    if (strncmp(p, "PUNCH_", 6) == 0) {
+    if (strncmp(p, RP2P_CTRTOK_PUNCH_REQ2,
+        strlen(RP2P_CTRTOK_PUNCH_REQ2)) == 0 ||
+        strncmp(p, RP2P_CTRTOK_PUNCH_OK2,
+        strlen(RP2P_CTRTOK_PUNCH_OK2)) == 0 ||
+        strncmp(p, RP2P_CTRTOK_PUNCH_CALL2,
+        strlen(RP2P_CTRTOK_PUNCH_CALL2)) == 0)
+    {
         p = strchr(p, '\n');
         if (!p) return 0;
         p++;
@@ -3915,12 +3736,15 @@ static int rp2p_parse_remote_candidates(const char *buf,
         if (!nl) return 0;
         len = (size_t)(nl - p);
         if (len == 0) return 0;
-        if (len == 3 && memcmp(p, "END", 3) == 0)
+        if (len == strlen(RP2P_CTRTOK_END) &&
+            memcmp(p, RP2P_CTRTOK_END, strlen(RP2P_CTRTOK_END)) == 0)
             return rp2p_normalize_candidates(out, out_count);
         if (len >= sizeof(line)) return 0;
         memcpy(line, p, len);
         line[len] = '\0';
-        if (strncmp(line, "CAND:", 5) != 0) return 0;
+        if (strncmp(line, RP2P_CTRTOK_CAND,
+            strlen(RP2P_CTRTOK_CAND)) != 0)
+            return 0;
         if (*out_count >= RP2P_CANDIDATES_MAX) return 0;
         if (!rp2p_parse_candidate_line(line, &out[*out_count])) return 0;
         (*out_count)++;
@@ -3962,13 +3786,13 @@ static int rp2p_append_candidate(char *msg, size_t cap,
 
     if (!candidate) return 0;
     if (strchr(candidate->addr, ':')) {
-        n = snprintf(cbuf, sizeof(cbuf), "CAND:%s:[%s]:%u\n",
-            rp2p_candidate_type_name(candidate->type), candidate->addr,
-            candidate->port);
+        n = snprintf(cbuf, sizeof(cbuf), "%s%s:[%s]:%u\n",
+            RP2P_CTRTOK_CAND, rp2p_candidate_type_name(candidate->type),
+            candidate->addr, candidate->port);
     } else {
-        n = snprintf(cbuf, sizeof(cbuf), "CAND:%s:%s:%u\n",
-            rp2p_candidate_type_name(candidate->type), candidate->addr,
-            candidate->port);
+        n = snprintf(cbuf, sizeof(cbuf), "%s%s:%s:%u\n",
+            RP2P_CTRTOK_CAND, rp2p_candidate_type_name(candidate->type),
+            candidate->addr, candidate->port);
     }
     if (n < 0 || (size_t)n >= sizeof(cbuf)) return 0;
     return rp2p_append_text(msg, cap, cbuf);
@@ -3992,8 +3816,9 @@ static int rp2p_copy_candidate_block(char *cursor, char *end, char *msg,
 
         if (!newline) return 0;
         len = (size_t)(newline - cursor);
-        if (len == 3 && memcmp(cursor, "END", 3) == 0) {
-            return rp2p_append_text(msg, cap, "END\n");
+        if (len == strlen(RP2P_CTRTOK_END) &&
+            memcmp(cursor, RP2P_CTRTOK_END, strlen(RP2P_CTRTOK_END)) == 0) {
+            return rp2p_append_text(msg, cap, RP2P_CTRTOK_END "\n");
         }
         if (len == 0 || len >= sizeof(line)) return 0;
         memcpy(line, cursor, len);
@@ -4015,8 +3840,10 @@ static int rp2p_parse_register_id(const char *line,
 {
     const char *cursor;
 
-    if (!line || strncmp(line, "REGISTER:", 9) != 0) return 0;
-    cursor = line + 9;
+    if (!line || strncmp(line, RP2P_CTRTOK_REGISTER,
+        strlen(RP2P_CTRTOK_REGISTER)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_REGISTER);
     if (!rp2p_parse_field(&cursor, id, RP2P_ID_MAX + 1, '\0'))
         return 0;
     if (*cursor != '\0') return 0;
@@ -4036,8 +3863,10 @@ static int rp2p_parse_register_solution(const char *line,
 {
     const char *cursor;
 
-    if (!line || strncmp(line, "REGISTER:", 9) != 0) return 0;
-    cursor = line + 9;
+    if (!line || strncmp(line, RP2P_CTRTOK_REGISTER,
+        strlen(RP2P_CTRTOK_REGISTER)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_REGISTER);
     if (!rp2p_parse_field(&cursor, id, RP2P_ID_MAX + 1, ':'))
         return 0;
     if (strncmp(cursor, "SOLUTION:", 9) != 0) return 0;
@@ -4068,8 +3897,10 @@ static int rp2p_parse_punch_req2(const char *line,
 {
     const char *cursor;
 
-    if (!line || strncmp(line, "PUNCH_REQ2:", 11) != 0) return 0;
-    cursor = line + 11;
+    if (!line || strncmp(line, RP2P_CTRTOK_PUNCH_REQ2,
+        strlen(RP2P_CTRTOK_PUNCH_REQ2)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_PUNCH_REQ2);
     if (!rp2p_parse_field(&cursor, self_id, RP2P_ID_MAX + 1, ':'))
         return 0;
     if (!rp2p_parse_field(&cursor, target_id, RP2P_ID_MAX + 1, ':'))
@@ -4096,8 +3927,10 @@ static int rp2p_parse_punch_ack2(const char *line,
 {
     const char *cursor;
 
-    if (!line || strncmp(line, "PUNCH_ACK2:", 11) != 0) return 0;
-    cursor = line + 11;
+    if (!line || strncmp(line, RP2P_CTRTOK_PUNCH_ACK2,
+        strlen(RP2P_CTRTOK_PUNCH_ACK2)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_PUNCH_ACK2);
     if (!rp2p_parse_field(&cursor, self_id, RP2P_ID_MAX + 1, ':'))
         return 0;
     if (!rp2p_parse_field(&cursor, target_id, RP2P_ID_MAX + 1, ':'))
@@ -4122,8 +3955,10 @@ static int rp2p_parse_punch_call2(const char *line,
 {
     const char *cursor;
 
-    if (!line || strncmp(line, "PUNCH_CALL2:", 12) != 0) return 0;
-    cursor = line + 12;
+    if (!line || strncmp(line, RP2P_CTRTOK_PUNCH_CALL2,
+        strlen(RP2P_CTRTOK_PUNCH_CALL2)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_PUNCH_CALL2);
     if (!rp2p_parse_field(&cursor, peer_id, RP2P_ID_MAX + 1, ':'))
         return 0;
     if (!rp2p_parse_field(&cursor, sess_id, RP2P_CTRL_SESSION_MAX + 1,
@@ -4145,8 +3980,10 @@ static int rp2p_parse_punch_ok2(const char *line,
 {
     const char *cursor;
 
-    if (!line || strncmp(line, "PUNCH_OK2:", 10) != 0) return 0;
-    cursor = line + 10;
+    if (!line || strncmp(line, RP2P_CTRTOK_PUNCH_OK2,
+        strlen(RP2P_CTRTOK_PUNCH_OK2)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_PUNCH_OK2);
     if (!rp2p_parse_field(&cursor, peer_id, RP2P_ID_MAX + 1, ':'))
         return 0;
     if (!rp2p_parse_field(&cursor, sess_id, RP2P_CTRL_SESSION_MAX + 1,
@@ -4168,8 +4005,10 @@ static int rp2p_parse_deregister(const char *line,
 {
     const char *cursor;
 
-    if (!line || strncmp(line, "DEREGISTER:", 11) != 0) return 0;
-    cursor = line + 11;
+    if (!line || strncmp(line, RP2P_CTRTOK_DEREGISTER,
+        strlen(RP2P_CTRTOK_DEREGISTER)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_DEREGISTER);
     if (!rp2p_parse_field(&cursor, id, RP2P_ID_MAX + 1, ':')) return 0;
     if (strncmp(cursor, "KEY:", 4) != 0) return 0;
     cursor += 4;
@@ -4190,8 +4029,10 @@ static int rp2p_parse_lookup(const char *line,
 {
     const char *cursor;
 
-    if (!line || strncmp(line, "LOOKUP:", 7) != 0) return 0;
-    cursor = line + 7;
+    if (!line || strncmp(line, RP2P_CTRTOK_LOOKUP,
+        strlen(RP2P_CTRTOK_LOOKUP)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_LOOKUP);
     if (!rp2p_parse_field(&cursor, id, RP2P_ID_MAX + 1, '\0'))
         return 0;
     if (*cursor != '\0') return 0;
@@ -4213,8 +4054,10 @@ static int rp2p_parse_challenge(const char *line, char nonce[17],
     unsigned long value;
     char *end;
 
-    if (!line || !bits || strncmp(line, "CHALLENGE:", 10) != 0) return 0;
-    cursor = line + 10;
+    if (!line || !bits || strncmp(line, RP2P_CTRTOK_CHALLENGE,
+        strlen(RP2P_CTRTOK_CHALLENGE)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_CHALLENGE);
     if (!rp2p_parse_field(&cursor, nonce, 17, ':')) return 0;
     if (!rp2p_parse_field(&cursor, bits_text, sizeof(bits_text), '\0'))
         return 0;
@@ -4236,8 +4079,10 @@ static int rp2p_parse_challenge(const char *line, char nonce[17],
 static int rp2p_parse_ok_key(const char *line, char key[RP2P_KEY_STR_SZ]) {
     const char *cursor;
 
-    if (!line || strncmp(line, "OK:KEY:", 7) != 0) return 0;
-    cursor = line + 7;
+    if (!line || strncmp(line, RP2P_CTRTOK_OK_KEY,
+        strlen(RP2P_CTRTOK_OK_KEY)) != 0)
+        return 0;
+    cursor = line + strlen(RP2P_CTRTOK_OK_KEY);
     if (!rp2p_parse_field(&cursor, key, RP2P_KEY_STR_SZ, '\0'))
         return 0;
     if (*cursor != '\0') return 0;
@@ -4649,12 +4494,13 @@ static int rp2p_punch_wait_response(int udp_fd, const char *session_id,
             int is_pong;
 
             recv_buf[n] = '\0';
-            is_pong = rp2p_parse_punch_packet(recv_buf, "PUNCH_PONG:",
+            is_pong = rp2p_parse_punch_packet(recv_buf,
+                RP2P_CTRTOK_PUNCH_PONG,
                 rx_sess, rx_from, rx_to);
             is_ping = 0;
             if (!is_pong) {
                 is_ping = rp2p_parse_punch_packet(recv_buf,
-                    "PUNCH_PING:", rx_sess, rx_from, rx_to);
+                    RP2P_CTRTOK_PUNCH_PING, rx_sess, rx_from, rx_to);
             }
             if (!is_ping && !is_pong) {
                 if (malformed) (*malformed)++;
@@ -4669,8 +4515,8 @@ static int rp2p_punch_wait_response(int udp_fd, const char *session_id,
                 *selected_addr = src_addr;
                 if (is_ping) {
                     char pong_msg[256];
-                    snprintf(pong_msg, sizeof(pong_msg),
-                        "PUNCH_PONG:%s:%s:%s\n", session_id, to_id, from_id);
+                    snprintf(pong_msg, sizeof(pong_msg), "%s%s:%s:%s\n",
+                        RP2P_CTRTOK_PUNCH_PONG, session_id, to_id, from_id);
                     sendto(udp_fd, pong_msg, strlen(pong_msg), 0,
                         (struct sockaddr *)&src_addr, src_len);
                 }
@@ -4719,8 +4565,8 @@ int rp2p_punch_select(rp2p_t *ctx, int sweep_limit, int udp_fd, const char *sess
     for (int c = 0; c < remote_candidate_count; c++) {
         if (remote_candidates[c].priority < 300u) direct_count++;
     }
-    snprintf(ping_msg, sizeof(ping_msg), "PUNCH_PING:%s:%s:%s\n",
-        session_id, from_id, to_id);
+    snprintf(ping_msg, sizeof(ping_msg), "%s%s:%s:%s\n",
+        RP2P_CTRTOK_PUNCH_PING, session_id, from_id, to_id);
     for (int i = 0; direct_count > 0 && i < RP2P_PUNCH_DIRECT_ROUNDS; i++) {
         for (int c = 0; c < remote_candidate_count; c++) {
             if (remote_candidates[c].priority >= 300u) continue;
@@ -4960,23 +4806,24 @@ int rp2p_serve_index(
                         cmd_buf[line_len] = '\0';
                         line_start += line_len + 1;
 
-                        if (strcmp(cmd_buf, RP2P_CTRL_HELLO) == 0) {
+                        if (strcmp(cmd_buf, RP2P_CTRTOK_HELLO) == 0) {
                             if (c->hello_ok) {
                                 rp2p_tcp_send(c->fd,
-                                    RP2P_CTRL_VERSION_ERROR);
+                                    RP2P_CTRTOK_ERROR_VERSION_MISMATCH);
                                 rp2p_conn_remove(ctx, i);
                                 fatal_frame = 1;
                                 break;
                             }
                             c->hello_ok = 1;
-                            rp2p_tcp_send(c->fd, RP2P_CTRL_HELLO_OK);
+                            rp2p_tcp_send(c->fd, RP2P_CTRTOK_HELLO_OK);
                             continue;
                         }
-                        if (strncmp(cmd_buf, "HELLO", 5) == 0 ||
+                        if (strncmp(cmd_buf, RP2P_CTRTOK_HELLO,
+                            strlen(RP2P_CTRTOK_HELLO) - strlen("RP2P/1")) == 0 ||
                             !c->hello_ok)
                         {
                             rp2p_tcp_send(c->fd,
-                                RP2P_CTRL_VERSION_ERROR);
+                                RP2P_CTRTOK_ERROR_VERSION_MISMATCH);
                             rp2p_conn_remove(ctx, i);
                             fatal_frame = 1;
                             break;
@@ -4986,14 +4833,15 @@ int rp2p_serve_index(
                             const char *colon = strchr(cmd_buf, ':');
                             size_t cmd_len = colon ? (size_t)(colon - cmd_buf) : strlen(cmd_buf);
                             if (cmd_len == 0 || cmd_len >= sizeof(cmd)) {
-                                rp2p_tcp_send(c->fd, "ERROR:malformed");
+                                rp2p_tcp_send(c->fd,
+                                    RP2P_CTRTOK_ERROR_MALFORMED);
                                 continue;
                             }
                             memcpy(cmd, cmd_buf, cmd_len);
                             cmd[cmd_len] = '\0';
                         }
 
-                        if (strcmp(cmd, "REGISTER") == 0) {
+                        if (strcmp(cmd, "RP2P_CTRTOK_REGISTER") == 0) {
                             struct sockaddr_storage peer_sa;
                             socklen_t peer_len = sizeof(peer_sa);
 
@@ -5004,7 +4852,8 @@ int rp2p_serve_index(
                             if (strstr(cmd_buf, ":SOLUTION:") == NULL &&
                                 !rp2p_parse_register_id(cmd_buf, id))
                             {
-                                rp2p_tcp_send(c->fd, "ERROR:invalid id");
+                                rp2p_tcp_send(c->fd,
+                                    RP2P_CTRTOK_ERROR_INVALID_ID);
                                 continue;
                             }
 
@@ -5027,7 +4876,8 @@ int rp2p_serve_index(
                                     {
                                         if (cidx >= 0)
                                             rp2p_remove_pow_challenge(ctx, cidx);
-                                        rp2p_tcp_send(c->fd, "AUTH_FAILED");
+                                        rp2p_tcp_send(c->fd,
+                                            RP2P_CTRTOK_AUTH_FAILED);
                                         continue;
                                     }
                                     rp2p_remove_pow_challenge(ctx, cidx);
@@ -5039,10 +4889,12 @@ int rp2p_serve_index(
                                         strcpy(c->id, id);
                                         c->registered = 1;
                                     } else {
-                                        rp2p_tcp_send(c->fd, "ERROR:peer table full");
+                                        rp2p_tcp_send(c->fd,
+                                            RP2P_CTRTOK_ERROR_PEER_TABLE_FULL);
                                     }
                                 } else {
-                                    rp2p_tcp_send(c->fd, "AUTH_FAILED");
+                                    rp2p_tcp_send(c->fd,
+                                        RP2P_CTRTOK_AUTH_FAILED);
                                     continue;
                                 }
                             } else if (c->registered && strcmp(c->id, id) == 0) {
@@ -5052,12 +4904,14 @@ int rp2p_serve_index(
                                 {
                                     rp2p_tcp_send(c->fd, reply_buf);
                                 } else {
-                                    rp2p_tcp_send(c->fd, "ERROR:not registered");
+                                    rp2p_tcp_send(c->fd,
+                                        RP2P_CTRTOK_ERROR_NOT_REGISTERED);
                                 }
                             } else if (ctx->n_pow_challenges >= RP2P_POW_CHALLENGES_MAX &&
                                 rp2p_find_pow_challenge(ctx, &peer_sa) < 0)
                             {
-                                rp2p_tcp_send(c->fd, "ERROR:busy");
+                                rp2p_tcp_send(c->fd,
+                                    RP2P_CTRTOK_ERROR_BUSY);
                             } else {
                                 unsigned char nonce[8];
                                 char nonce_hex[17];
@@ -5066,21 +4920,24 @@ int rp2p_serve_index(
                                     !rp2p_hex_encode(nonce, sizeof(nonce),
                                         nonce_hex, sizeof(nonce_hex)))
                                 {
-                                    rp2p_tcp_send(c->fd, "ERROR:random");
+                                    rp2p_tcp_send(c->fd,
+                                        RP2P_CTRTOK_ERROR_RANDOM);
                                     continue;
                                 }
                                 snprintf(reply_buf, sizeof(reply_buf),
-                                    "CHALLENGE:%s:%d", nonce_hex, ctx->pow_bits);
+                                    "%s%s:%d", RP2P_CTRTOK_CHALLENGE,
+                                    nonce_hex, ctx->pow_bits);
                                 if (!rp2p_store_pow_challenge(ctx, &peer_sa, id,
-                                    reply_buf + 10))
+                                    reply_buf + strlen(RP2P_CTRTOK_CHALLENGE)))
                                 {
-                                    rp2p_tcp_send(c->fd, "ERROR:busy");
+                                    rp2p_tcp_send(c->fd,
+                                        RP2P_CTRTOK_ERROR_BUSY);
                                 } else {
                                     rp2p_tcp_send(c->fd, reply_buf);
                                 }
                             }
 
-                        } else if (strcmp(cmd, "PUNCH_REQ2") == 0) {
+                        } else if (strcmp(cmd, "RP2P_CTRTOK_PUNCH_REQ2") == 0) {
                             char self_id[RP2P_ID_MAX + 1] = {0};
                             char target_id[RP2P_ID_MAX + 1] = {0};
                             char sess_id[RP2P_CTRL_SESSION_MAX + 1] = {0};
@@ -5106,12 +4963,15 @@ int rp2p_serve_index(
 
                                 if (target_fd != -1 && srv_idx >= 0) {
                                     char msg[RP2P_BUF];
-                                    snprintf(msg, sizeof(msg), "PUNCH_CALL2:%s:%s\n", self_id, sess_id);
+                                    snprintf(msg, sizeof(msg), "%s%s:%s\n",
+                                        RP2P_CTRTOK_PUNCH_CALL2, self_id,
+                                        sess_id);
 
                                     if (!rp2p_copy_candidate_block(line_start,
                                         block_end, msg, sizeof(msg)))
                                     {
-                                        rp2p_tcp_send(c->fd, "ERROR:malformed");
+                                        rp2p_tcp_send(c->fd,
+                                            RP2P_CTRTOK_ERROR_MALFORMED);
                                         line_start = block_end;
                                         continue;
                                     }
@@ -5127,18 +4987,21 @@ int rp2p_serve_index(
                                         pp->consumer_fd = c->fd;
                                         pp->ts = rp2p_now_s();
                                     } else {
-                                        rp2p_tcp_send(c->fd, "ERROR:busy");
+                                        rp2p_tcp_send(c->fd,
+                                            RP2P_CTRTOK_ERROR_BUSY);
                                     }
                                 } else {
-                                    rp2p_tcp_send(c->fd, "ERROR:offline");
+                                    rp2p_tcp_send(c->fd,
+                                        RP2P_CTRTOK_ERROR_OFFLINE);
                                     line_start = block_end;
                                 }
                             } else {
-                                rp2p_tcp_send(c->fd, "ERROR:malformed");
+                                rp2p_tcp_send(c->fd,
+                                    RP2P_CTRTOK_ERROR_MALFORMED);
                                 line_start = block_end;
                             }
 
-                        } else if (strcmp(cmd, "PUNCH_ACK2") == 0) {
+                        } else if (strcmp(cmd, "RP2P_CTRTOK_PUNCH_ACK2") == 0) {
                             char ack_self_id[RP2P_ID_MAX + 1] = {0};
                             char ack_target_id[RP2P_ID_MAX + 1] = {0};
                             char ack_sess_id[RP2P_CTRL_SESSION_MAX + 1] = {0};
@@ -5155,11 +5018,14 @@ int rp2p_serve_index(
                                 int pp_idx = rp2p_pending_punch_find(ctx, ack_self_id, ack_target_id, ack_sess_id);
                                 if (pp_idx >= 0) {
                                     char ok2[RP2P_BUF];
-                                    snprintf(ok2, sizeof(ok2), "PUNCH_OK2:%s:%s\n", ack_self_id, ack_sess_id);
+                                    snprintf(ok2, sizeof(ok2), "%s%s:%s\n",
+                                        RP2P_CTRTOK_PUNCH_OK2, ack_self_id,
+                                        ack_sess_id);
                                     if (!rp2p_copy_candidate_block(line_start,
                                         block_end, ok2, sizeof(ok2)))
                                     {
-                                        rp2p_tcp_send(c->fd, "ERROR:malformed");
+                                        rp2p_tcp_send(c->fd,
+                                            RP2P_CTRTOK_ERROR_MALFORMED);
                                         line_start = block_end;
                                         continue;
                                     }
@@ -5168,52 +5034,61 @@ int rp2p_serve_index(
                                 }
                                 line_start = block_end;
                             } else {
-                                rp2p_tcp_send(c->fd, "ERROR:malformed");
+                                rp2p_tcp_send(c->fd,
+                                    RP2P_CTRTOK_ERROR_MALFORMED);
                                 line_start = block_end;
                             }
                             
-                        } else if (strcmp(cmd, "DEREGISTER") == 0) {
+                        } else if (strcmp(cmd, "RP2P_CTRTOK_DEREGISTER") == 0) {
                             char dkey[RP2P_KEY_STR_SZ];
                             if (rp2p_parse_deregister(cmd_buf, id, dkey)) {
                                 srv_idx = rp2p_find_peer(ctx, id);
                                 if (srv_idx >= 0 && strcmp(ctx->peers[srv_idx].key, dkey) == 0) {
                                     rp2p_remove_peer(ctx, id);
-                                    rp2p_tcp_send(c->fd, "OK");
+                                    rp2p_tcp_send(c->fd, RP2P_CTRTOK_OK);
                                 } else {
-                                    rp2p_tcp_send(c->fd, "ERROR:invalid key");
+                                    rp2p_tcp_send(c->fd,
+                                        RP2P_CTRTOK_ERROR_INVALID_KEY);
                                 }
                             } else {
-                                rp2p_tcp_send(c->fd, "ERROR:malformed");
+                                rp2p_tcp_send(c->fd,
+                                    RP2P_CTRTOK_ERROR_MALFORMED);
                             }
 
-                        } else if (strcmp(cmd, "LIST") == 0) {
-                            if (strcmp(cmd_buf, "LIST") != 0) {
-                                rp2p_tcp_send(c->fd, "ERROR:malformed");
+                        } else if (strcmp(cmd, "RP2P_CTRTOK_LIST") == 0) {
+                            if (strcmp(cmd_buf, RP2P_CTRTOK_LIST) != 0) {
+                                rp2p_tcp_send(c->fd,
+                                    RP2P_CTRTOK_ERROR_MALFORMED);
                                 continue;
                             }
                             rp2p_evict_stale(ctx);
                             for (srv_idx = 0; srv_idx < ctx->n_peers; srv_idx++) {
-                                snprintf(reply_buf, sizeof(reply_buf), "PEER:%s",
+                                snprintf(reply_buf, sizeof(reply_buf), "%s%s",
+                                    RP2P_CTRTOK_PEER,
                                     ctx->peers[srv_idx].id);
                                 rp2p_tcp_send(c->fd, reply_buf);
                             }
-                            rp2p_tcp_send(c->fd, "END");
+                            rp2p_tcp_send(c->fd, RP2P_CTRTOK_END);
 
-                        } else if (strcmp(cmd, "LOOKUP") == 0) {
+                        } else if (strcmp(cmd, "RP2P_CTRTOK_LOOKUP") == 0) {
                             if (rp2p_parse_lookup(cmd_buf, id)) {
                                 srv_idx = rp2p_find_peer(ctx, id);
                                 if (srv_idx >= 0) {
-                                    snprintf(reply_buf, sizeof(reply_buf), "PEER:%s",
+                                    snprintf(reply_buf, sizeof(reply_buf), "%s%s",
+                                        RP2P_CTRTOK_PEER,
                                         ctx->peers[srv_idx].id);
                                     rp2p_tcp_send(c->fd, reply_buf);
                                 } else {
-                                    rp2p_tcp_send(c->fd, "NOT_FOUND");
+                                    rp2p_tcp_send(c->fd,
+                                        RP2P_CTRTOK_NOT_FOUND);
                                 }
                             } else {
-                                rp2p_tcp_send(c->fd, "ERROR:malformed");
+                                rp2p_tcp_send(c->fd,
+                                    RP2P_CTRTOK_ERROR_MALFORMED);
                             }
                         } else {
-                            rp2p_tcp_send(c->fd, "ERROR:unknown command");
+                            rp2p_tcp_send(c->fd,
+                                RP2P_CTRTOK_ERROR_UNKNOWN_COMMAND);
                         }
 
                         if (line_start >= c->buf + c->buf_len) break;
@@ -5236,26 +5111,6 @@ int rp2p_serve_index(
     rp2p_platform_cleanup();
     return RP2P_OK;
 }
-
-/**
- * build candidates.
- * @return 0 on success, -1 on error.
- */
-
-/**
- * Build candidates.
- * @return 0 on success, -1 on error.
- */
-
-/**
- * punch candidates.
- * @return 0 on success, -1 on error.
- */
-
-/**
- * save key.
- * @return None.
- */
 
 /**
  * Save key.
@@ -5289,11 +5144,6 @@ static void rp2p_mkdir_p(char *path) {
 }
 
 /**
- * save key.
- * @return None.
- */
-
-/**
  * Save key.
  * @return Status code.
  */
@@ -5302,19 +5152,24 @@ static void rp2p_save_key(const char *id, const char *key) {
     char dir[512];
     char path[576];
     FILE *f;
+
     home = getenv("HOME");
     if (!home) return;
-    snprintf(dir, sizeof(dir), "%s/.local/share/p2p/keys", home);
+
+    snprintf(dir, sizeof(dir), "%s/.local/share/rp2p/keys", home);
     rp2p_mkdir_p(dir);
+
+#ifndef _WIN32
+    chmod(dir, 0700);
+#endif
+
     snprintf(path, sizeof(path), "%s/%s", dir, id);
     f = fopen(path, "w");
-    if (f) { fprintf(f, "%s\n", key); fclose(f); }
+    if (f) {
+        fprintf(f, "%s\n", key);
+        fclose(f);
+    }
 }
-
-/**
- * load key.
- * @return None.
- */
 
 /**
  * Load key.
@@ -5326,7 +5181,7 @@ static void rp2p_load_key(const char *id, char *key, size_t cap) {
     FILE *f;
     home = getenv("HOME");
     if (!home) return;
-    snprintf(path, sizeof(path), "%s/.local/share/p2p/keys/%s", home, id);
+    snprintf(path, sizeof(path), "%s/.local/share/rp2p/keys/%s", home, id);
     f = fopen(path, "r");
     if (f) {
         if (fgets(key, (int)cap, f)) {
@@ -5336,11 +5191,6 @@ static void rp2p_load_key(const char *id, char *key, size_t cap) {
         fclose(f);
     }
 }
-
-/**
- * deregister.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Deregister.
@@ -5360,7 +5210,8 @@ int rp2p_deregister(
     rp2p_load_key(id, key, sizeof(key));
     if (key[0] == '\0') return RP2P_ENOENT;
 
-    snprintf(cmd, sizeof(cmd), "DEREGISTER:%s:KEY:%s", id, key);
+    snprintf(cmd, sizeof(cmd), "%s%s:KEY:%s", RP2P_CTRTOK_DEREGISTER,
+        id, key);
     {
     rp2p_fd_t fd = rp2p_control_connect(index_host, index_port);
         if (RP2P_ISERR(fd)) return RP2P_ENET;
@@ -5369,14 +5220,9 @@ int rp2p_deregister(
         RP2P_FD_CLOSE(fd);
     }
 
-    if (strcmp(reply, "OK") != 0) return RP2P_ERROR;
+    if (strcmp(reply, RP2P_CTRTOK_OK) != 0) return RP2P_ERROR;
     return RP2P_OK;
 }
-
-/**
- * wait.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Wait.
@@ -5410,7 +5256,8 @@ int rp2p_wait(
     udp_fd = rp2p_create_socket(udp_any_host, 0);
     if (RP2P_ISERR(udp_fd)) { RP2P_FD_CLOSE(control_fd); return RP2P_ENET; }
 
-    snprintf(send_buf, sizeof(send_buf), "REGISTER:%s", self_id);
+    snprintf(send_buf, sizeof(send_buf), "%s%s", RP2P_CTRTOK_REGISTER,
+        self_id);
     if (rp2p_tcp_send(control_fd, send_buf) != RP2P_OK ||
         rp2p_tcp_readline(control_fd, recv_buf, (int)sizeof(recv_buf), 10) < 0)
     {
@@ -5419,7 +5266,8 @@ int rp2p_wait(
         return RP2P_ENET;
     }
 
-    if (strncmp(recv_buf, "CHALLENGE:", 10) == 0) {
+    if (strncmp(recv_buf, RP2P_CTRTOK_CHALLENGE,
+        strlen(RP2P_CTRTOK_CHALLENGE)) == 0) {
         char nonce[17];
         char solution[17];
         char proof[65];
@@ -5439,7 +5287,8 @@ int rp2p_wait(
             return RP2P_ERROR;
         }
         snprintf(send_buf, sizeof(send_buf),
-            "REGISTER:%s:SOLUTION:%s:PROOF:%s", self_id, solution, proof);
+            "%s%s:SOLUTION:%s:PROOF:%s", RP2P_CTRTOK_REGISTER, self_id,
+            solution, proof);
         if (rp2p_tcp_send(control_fd, send_buf) != RP2P_OK ||
             rp2p_tcp_readline(control_fd, recv_buf, (int)sizeof(recv_buf), 10) < 0)
         {
@@ -5512,7 +5361,8 @@ int rp2p_wait(
             if (ctx->stop_requested) break;
 
             if (rp2p_now_s() - last_heartbeat >= RP2P_HEARTBEAT_S) {
-                snprintf(send_buf, sizeof(send_buf), "REGISTER:%s", self_id);
+                snprintf(send_buf, sizeof(send_buf), "%s%s",
+                    RP2P_CTRTOK_REGISTER, self_id);
                 rp2p_tcp_send(control_fd, send_buf);
                 last_heartbeat = rp2p_now_s();
             }
@@ -5548,7 +5398,7 @@ int rp2p_wait(
                                     !rp2p_append_text(recv_buf,
                                         sizeof(recv_buf), lbuf))
                                     break;
-                                if (strcmp(lbuf, "END") == 0) {
+                                if (strcmp(lbuf, RP2P_CTRTOK_END) == 0) {
                                     saw_end = 1;
                                     break;
                                 }
@@ -5570,15 +5420,16 @@ int rp2p_wait(
 
                         rp2p_gather_candidates(ctx, udp_fd, my_cands,
                             RP2P_CANDIDATES_MAX, &my_cand_count);
-                        snprintf(ack_buf, sizeof(ack_buf), "PUNCH_ACK2:%s:%s:%s\n",
-                            self_id, conn_id, ack_sess);
+                        snprintf(ack_buf, sizeof(ack_buf), "%s%s:%s:%s\n",
+                            RP2P_CTRTOK_PUNCH_ACK2, self_id, conn_id,
+                            ack_sess);
                         for (int ci = 0; ci < my_cand_count; ci++) {
                             if (!rp2p_append_candidate(ack_buf,
                                 sizeof(ack_buf), &my_cands[ci]))
                                 continue;
                         }
                         if (!rp2p_append_text(ack_buf, sizeof(ack_buf),
-                            "END\n"))
+                            RP2P_CTRTOK_END "\n"))
                             continue;
                         rp2p_tcp_send(control_fd, ack_buf);
                         
@@ -5639,11 +5490,11 @@ int rp2p_wait(
                             }
                             sessions[n_sessions++] = sess;
 
-                            rp2p_sendto_addr(udp_fd, "P2P_PUNCH:server", 16,
-                                &peer);
+                            rp2p_sendto_addr(udp_fd, RP2P_CTRTOK_PUNCH_SERVER,
+                                strlen(RP2P_CTRTOK_PUNCH_SERVER), &peer);
                         } else {
-                            rp2p_sendto_addr(udp_fd, "P2P_PUNCH:server", 16,
-                                &peer);
+                            rp2p_sendto_addr(udp_fd, RP2P_CTRTOK_PUNCH_SERVER,
+                                strlen(RP2P_CTRTOK_PUNCH_SERVER), &peer);
                         }
                     }
                 }
@@ -5676,10 +5527,14 @@ int rp2p_wait(
                     }
 
                     if (found >= 0) {
-                        if (strncmp(buf, "RP2P_KA:", 7) == 0 ||
-                            strncmp(buf, "P2P_PUNCH:", 10) == 0 ||
-                            strncmp(buf, "PUNCH_PING:", 11) == 0 ||
-                            strncmp(buf, "PUNCH_PONG:", 11) == 0) {
+                        if (strncmp(buf, RP2P_CTRTOK_KA,
+                            strlen(RP2P_CTRTOK_KA)) == 0 ||
+                            strncmp(buf, RP2P_CTRTOK_PUNCH,
+                            strlen(RP2P_CTRTOK_PUNCH)) == 0 ||
+                            strncmp(buf, RP2P_CTRTOK_PUNCH_PING,
+                            strlen(RP2P_CTRTOK_PUNCH_PING)) == 0 ||
+                            strncmp(buf, RP2P_CTRTOK_PUNCH_PONG,
+                            strlen(RP2P_CTRTOK_PUNCH_PONG)) == 0) {
                             sessions[found].last_rx = rp2p_now_s();
                         } else {
                             if (sessions[found].is_tcp) {
@@ -5704,14 +5559,17 @@ int rp2p_wait(
                             }
                             sessions[found].last_rx = rp2p_now_s();
                         }
-                    } else if (strncmp(buf, "PUNCH_PING:", 11) == 0) {
+                    } else if (strncmp(buf, RP2P_CTRTOK_PUNCH_PING,
+                        strlen(RP2P_CTRTOK_PUNCH_PING)) == 0) {
                         char pong[256];
                         char ping_sess[64] = {0}, ping_from[64] = {0}, ping_to[64] = {0};
-                        if (rp2p_parse_punch_packet(buf, "PUNCH_PING:",
+                        if (rp2p_parse_punch_packet(buf,
+                            RP2P_CTRTOK_PUNCH_PING,
                             ping_sess, ping_from, ping_to))
                         {
-                            snprintf(pong, sizeof(pong), "PUNCH_PONG:%s:%s:%s",
-                                ping_sess, ping_to, ping_from);
+                            snprintf(pong, sizeof(pong), "%s%s:%s:%s",
+                                RP2P_CTRTOK_PUNCH_PONG, ping_sess, ping_to,
+                                ping_from);
                             sendto(udp_fd, pong, strlen(pong), 0,
                                 (const struct sockaddr *)&from, fromlen);
                         }
@@ -5726,8 +5584,14 @@ int rp2p_wait(
                             sessions[unset].last_rx = rp2p_now_s();
                             sessions[unset].last_ka = sessions[unset].last_rx;
                             rp2p_sendto_addr(udp_fd, buf, (size_t)n, &from);
-                            if (strncmp(buf, "P2P_PUNCH:", 10) != 0 &&
-                                strncmp(buf, "RP2P_KA:", 7) != 0) {
+                            if (strncmp(buf, RP2P_CTRTOK_PUNCH,
+                                strlen(RP2P_CTRTOK_PUNCH)) != 0 &&
+                                strncmp(buf, RP2P_CTRTOK_KA,
+                                strlen(RP2P_CTRTOK_KA)) != 0 &&
+                                strncmp(buf, RP2P_CTRTOK_PUNCH_PING,
+                                strlen(RP2P_CTRTOK_PUNCH_PING)) != 0 &&
+                                strncmp(buf, RP2P_CTRTOK_PUNCH_PONG,
+                                strlen(RP2P_CTRTOK_PUNCH_PONG)) != 0) {
                                 if (sessions[unset].is_tcp) {
                                     if (sessions[unset].backend_fd != RP2P_FD_INVALID &&
                                         rp2p_stream_process_packet(ctx, udp_fd,
@@ -5749,7 +5613,8 @@ int rp2p_wait(
                                         (const struct sockaddr *)&backend_addr, sizeof(backend_addr));
                                 }
                             }
-                        } else if (strncmp(buf, "P2P_PUNCH:", 10) == 0) {
+                        } else if (strncmp(buf, RP2P_CTRTOK_PUNCH,
+                            strlen(RP2P_CTRTOK_PUNCH)) == 0) {
                             rp2p_sendto_addr(udp_fd, buf, (size_t)n, &from);
                         }
                     }
@@ -5797,8 +5662,8 @@ int rp2p_wait(
                     }
                 }
                 if (rp2p_now_s() - sessions[i].last_ka > RP2P_KEEPALIVE_S) {
-                rp2p_sendto_addr(udp_fd, "RP2P_KA:", 7,
-                    &sessions[i].peer_addr);
+                rp2p_sendto_addr(udp_fd, RP2P_CTRTOK_KA,
+                    strlen(RP2P_CTRTOK_KA), &sessions[i].peer_addr);
                     sessions[i].last_ka = rp2p_now_s();
                 }
                 if (rp2p_now_s() - sessions[i].last_rx > RP2P_DISCONNECT_S) {
@@ -5821,11 +5686,6 @@ int rp2p_wait(
     RP2P_FD_CLOSE(udp_fd);
     return RP2P_OK;
 }
-
-/**
- * send punch req.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Send punch req cands.
@@ -5853,14 +5713,15 @@ static int rp2p_send_punch_req_cands(
     char recv_buf[RP2P_BUF];
     int n;
     
-    n = snprintf(send_buf, sizeof(send_buf), "PUNCH_REQ2:%s:%s:%s\n",
-        self_id, target_id, session_id ? session_id : "0");
+    n = snprintf(send_buf, sizeof(send_buf), "%s%s:%s:%s\n",
+        RP2P_CTRTOK_PUNCH_REQ2, self_id, target_id,
+        session_id ? session_id : "0");
     if (n < 0 || (size_t)n >= sizeof(send_buf)) return RP2P_ERROR;
     for (int i = 0; i < cand_count; i++) {
         if (!rp2p_append_candidate(send_buf, sizeof(send_buf), &cands[i]))
             return RP2P_ERROR;
     }
-    if (!rp2p_append_text(send_buf, sizeof(send_buf), "END\n"))
+    if (!rp2p_append_text(send_buf, sizeof(send_buf), RP2P_CTRTOK_END "\n"))
         return RP2P_ERROR;
     
     if (rp2p_tcp_send(ctrl_fd, send_buf) != RP2P_OK)
@@ -5868,7 +5729,8 @@ static int rp2p_send_punch_req_cands(
     if (rp2p_tcp_readline(ctrl_fd, recv_buf, (int)sizeof(recv_buf), 20) < 0)
         return RP2P_OK;
     
-    if (strncmp(recv_buf, "PUNCH_OK2:", 10) == 0) {
+    if (strncmp(recv_buf, RP2P_CTRTOK_PUNCH_OK2,
+        strlen(RP2P_CTRTOK_PUNCH_OK2)) == 0) {
         char lbuf[128];
         char ok_id[RP2P_ID_MAX + 1];
         char ok_sess[RP2P_CTRL_SESSION_MAX + 1];
@@ -5879,7 +5741,7 @@ static int rp2p_send_punch_req_cands(
             if (!rp2p_append_text(recv_buf, sizeof(recv_buf), "\n") ||
                 !rp2p_append_text(recv_buf, sizeof(recv_buf), lbuf))
                 return RP2P_ERROR;
-            if (strcmp(lbuf, "END") == 0) {
+            if (strcmp(lbuf, RP2P_CTRTOK_END) == 0) {
                 saw_end = 1;
                 break;
             }
@@ -5893,11 +5755,6 @@ static int rp2p_send_punch_req_cands(
     }
     return RP2P_OK;
 }
-
-/**
- * open udp session.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Open udp session cands.
@@ -5941,11 +5798,6 @@ static int rp2p_open_udp_session_cands(
     *out_peer = peer_addr;
     return RP2P_OK;
 }
-
-/**
- * connect.
- * @return 0 on success, -1 on error.
- */
 
 /**
  * Connect.
@@ -5997,15 +5849,17 @@ int rp2p_connect(
     }
     {
         char recv_buf[RP2P_BUF];
-        snprintf(recv_buf, sizeof(recv_buf), "LOOKUP:%s", target_id);
+        snprintf(recv_buf, sizeof(recv_buf), "%s%s", RP2P_CTRTOK_LOOKUP,
+            target_id);
         if (rp2p_tcp_send(ctrl_fd, recv_buf) != RP2P_OK ||
             rp2p_tcp_readline(ctrl_fd, recv_buf, (int)sizeof(recv_buf), 5) < 0)
         { RP2P_FD_CLOSE(ctrl_fd); RP2P_FD_CLOSE(local_fd); if (!RP2P_ISERR(tcp_listen_fd)) RP2P_FD_CLOSE(tcp_listen_fd); rp2p_platform_cleanup(); return RP2P_ENET; }
-        if (strcmp(recv_buf, "NOT_FOUND") == 0)
+        if (strcmp(recv_buf, RP2P_CTRTOK_NOT_FOUND) == 0)
         { RP2P_FD_CLOSE(ctrl_fd); RP2P_FD_CLOSE(local_fd); if (!RP2P_ISERR(tcp_listen_fd)) RP2P_FD_CLOSE(tcp_listen_fd); rp2p_platform_cleanup(); return RP2P_ENOENT; }
-        if (strcmp(recv_buf, "PEER:") == 0 ||
-            strncmp(recv_buf, "PEER:", 5) != 0 ||
-            strcmp(recv_buf + 5, target_id) != 0)
+        if (strcmp(recv_buf, RP2P_CTRTOK_PEER) == 0 ||
+            strncmp(recv_buf, RP2P_CTRTOK_PEER,
+            strlen(RP2P_CTRTOK_PEER)) != 0 ||
+            strcmp(recv_buf + strlen(RP2P_CTRTOK_PEER), target_id) != 0)
         { RP2P_FD_CLOSE(ctrl_fd); RP2P_FD_CLOSE(local_fd); if (!RP2P_ISERR(tcp_listen_fd)) RP2P_FD_CLOSE(tcp_listen_fd); rp2p_platform_cleanup(); return RP2P_ERROR; }
     }
     RP2P_FD_CLOSE(ctrl_fd);
@@ -6215,10 +6069,18 @@ udp_skip:
             n = (int)recvfrom(sessions[i].fd, buf, sizeof(buf), 0,
                 (struct sockaddr *)&from, &fromlen);
             if (n > 0) {
-                if ((n >= 7 && strncmp(buf, "RP2P_KA:", 7) == 0) ||
-                    (n >= 10 && strncmp(buf, "P2P_PUNCH:", 10) == 0) ||
-                    (n >= 11 && strncmp(buf, "PUNCH_PING:", 11) == 0) ||
-                    (n >= 11 && strncmp(buf, "PUNCH_PONG:", 11) == 0)) {
+                if (((size_t)n >= strlen(RP2P_CTRTOK_KA) &&
+                    strncmp(buf, RP2P_CTRTOK_KA,
+                    strlen(RP2P_CTRTOK_KA)) == 0) ||
+                    ((size_t)n >= strlen(RP2P_CTRTOK_PUNCH) &&
+                    strncmp(buf, RP2P_CTRTOK_PUNCH,
+                    strlen(RP2P_CTRTOK_PUNCH)) == 0) ||
+                    ((size_t)n >= strlen(RP2P_CTRTOK_PUNCH_PING) &&
+                    strncmp(buf, RP2P_CTRTOK_PUNCH_PING,
+                    strlen(RP2P_CTRTOK_PUNCH_PING)) == 0) ||
+                    ((size_t)n >= strlen(RP2P_CTRTOK_PUNCH_PONG) &&
+                    strncmp(buf, RP2P_CTRTOK_PUNCH_PONG,
+                    strlen(RP2P_CTRTOK_PUNCH_PONG)) == 0)) {
                     sessions[i].last_rx = rp2p_now_s();
                 } else {
                     if (sessions[i].is_tcp) {
@@ -6254,8 +6116,8 @@ udp_skip:
                 }
             }
             if (rp2p_now_s() - sessions[i].last_ka > RP2P_KEEPALIVE_S) {
-                rp2p_sendto_addr(sessions[i].fd, "RP2P_KA:", 7,
-                    &sessions[i].peer_addr);
+                rp2p_sendto_addr(sessions[i].fd, RP2P_CTRTOK_KA,
+                    strlen(RP2P_CTRTOK_KA), &sessions[i].peer_addr);
                 sessions[i].last_ka = rp2p_now_s();
             }
             if (rp2p_now_s() - sessions[i].last_rx > RP2P_DISCONNECT_S) {
